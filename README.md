@@ -1,20 +1,21 @@
 # nano-banana
 
 Deterministic image-generation CLI for LLM agents, built on **Google Nano
-Banana Pro** (Gemini Image API). It produces professional PNG images with
-template-aware aspect ratios for the msg systems Research PowerPoint template,
-and ships as a Claude Code plugin (`image` skill).
+Banana Pro** (Gemini Image API). It produces professional PNG images at a
+chosen, model-validated aspect ratio, and ships as a Claude Code plugin
+(`image` skill).
 
 This is the Node.js successor of the former Python `image` skill.
 
-## Layout
+## Project structure
 
 ```
 nano-banana-project/
   src/                         TypeScript source
     cli/main.ts                CLI entry point (arg parsing, JSON envelope)
     core/generate.ts           Gemini Image API call (@google/genai)
-    core/layouts.ts            PowerPoint layout -> aspect ratio tables
+    core/aspect.ts             accepted aspect ratios + guard
+    core/models.ts             model tiers + per-model ratio support
     infra/apikey.ts            env-only API key resolution
     infra/args.ts              tiny --flag parser
     infra/version.ts           build-injected version facts
@@ -48,15 +49,69 @@ npm run plugin:sync    # build + copy bundle into the skill + sync versions
 export GEMINI_API_KEY=...
 
 node dst/nano-banana.mjs --prompt "a red sports car at dusk" --output car.png
-node dst/nano-banana.mjs --prompt "..." --output slide0.png --layout 0
-node dst/nano-banana.mjs --list-layouts
+node dst/nano-banana.mjs --prompt "..." --output portrait.png --aspect-ratio 2:3
+node dst/nano-banana.mjs --prompt "..." --output hi.png --image-size 4K
+node dst/nano-banana.mjs --list-models
 ```
 
-Every run prints one JSON envelope on stdout:
+## CLI reference
+
+Run `nano-banana --help` for the same reference at the terminal.
+
+### Options
+
+| Option | Required | Default | Description |
+|--------|----------|---------|-------------|
+| `--prompt <text>` | yes | — | image generation prompt (English recommended) |
+| `--output <path>` | yes | — | output PNG path |
+| `--aspect-ratio <r>` | no | `16:9` | aspect ratio; the allowed set is **model-dependent** (see below) |
+| `--image-size <s>` | no | model default | output resolution (`512`/`1K`/`2K`/`4K`); the allowed set is **model-dependent** |
+| `--model <id>` | no | `gemini-3-pro-image` | Gemini model id (see Models) |
+| `--key-file <path>` | no | environment | read the API key from a file (CI override; default reads the env) |
+| `--list-models` | — | — | print the model → ratios/resolution table and exit |
+| `--version` | — | — | print version and exit |
+| `--help` | — | — | print the full reference and exit |
+
+Both `--flag value` and `--flag=value` are accepted; the `=` form also lets a
+value begin with `--` (e.g. `--prompt="--dramatic ..."`). Unknown flags are
+rejected.
+
+### Models
+
+| API id | Tier | Aspect ratios | Resolutions |
+|--------|------|---------------|-------------|
+| `gemini-2.5-flash-image` | Nano Banana 1 | 10 standard | `1K` |
+| `gemini-3-pro-image` (default) | Nano Banana Pro | 10 standard | `1K`, `2K`, `4K` |
+| `gemini-3.1-flash-image` | Nano Banana 2 | 14 (standard + 4) | `512`, `1K`, `2K`, `4K` |
+
+- **Standard ratios (10)**: `1:1, 4:5, 5:4, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9`
+- **Nano Banana 2 adds (4)**: `1:4, 4:1, 1:8, 8:1` (ultra-wide / ultra-tall)
+
+`--aspect-ratio` and `--image-size` are each validated against the chosen
+model's set: passing an unsupported value (e.g. `1:4` or `512` to Pro, or `2K`
+to Nano Banana 1) is a usage error (exit 2). Without `--image-size` the model
+uses its own default (~1K). `--list-models` prints the full per-model ratios and
+resolutions.
+
+### Output
+
+Every run prints **exactly one JSON envelope on stdout**; diagnostic notes go to
+stderr.
 
 ```json
 { "status": "ok", "file": "car.png", "aspect_ratio": "16:9", "model": "gemini-3-pro-image" }
+{ "status": "error", "message": "--prompt and --output are required (unless --list-models)" }
 ```
+
+The output file is always a true PNG (JPEG responses are re-encoded).
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | success |
+| `2` | usage error (missing or invalid arguments) |
+| `1` | runtime error (API, network, or no image returned) |
 
 ## API key
 
@@ -114,13 +169,14 @@ keychain / Windows certificate store) — where corporate IT installed the
 Zscaler root — into Node's default CA set (`tls.setDefaultCACertificates`). No
 env var, no shell prefix and **no bundled certificate** are needed; just run
 the tool normally. The merge extends, never replaces, the bundled roots, so
-public endpoints keep verifying. It is a no-op on Node < 22.15 (which lacks the
-system-CA API).
+public endpoints keep verifying. It is a no-op on Node versions without
+`tls.setDefaultCACertificates` (Node 22.x and earlier), which fall back to the
+manual override below.
 
 Manual overrides remain available for unusual setups:
 
 ```bash
-# A cert file outside the repo (also covers Node < 22.15)
+# A cert file outside the repo (also covers Node without setDefaultCACertificates)
 NODE_EXTRA_CA_CERTS=$HOME/.certs/zscaler-root.crt node dst/nano-banana.mjs ...
 ```
 

@@ -3,18 +3,16 @@ name: image
 description: >
   Generate professional images using Google Nano Banana Pro (Gemini Image API).
   Trigger this skill when the user wants to generate, create, or produce images,
-  photos, illustrations, or visuals. Also trigger when the PowerPoint skill needs
-  images for slide placeholders. Supports automatic aspect ratio selection for
-  msg systems Research PowerPoint template layouts.
+  photos, illustrations, or visuals, or when another skill needs an image for a
+  given aspect ratio.
 user-invocable: true
 disable-model-invocation: false
 ---
 
-<!-- (c) Matthias Brusdeylins - msg systems - msg research (XT) -->
+<!-- (c) Matthias Brusdeylins -->
 <!-- 100% agentic coded (Claude Code) -->
 
-You are an expert in professional image generation for corporate presentations
-and marketing materials.
+You are an expert in professional photographic image generation.
 
 ## Execution Rules
 
@@ -25,9 +23,9 @@ and marketing materials.
   (needs Node >= 20; if `node --version` fails, tell the user to install Node
   20+ and stop).
 - Execute each Bash call as a separate tool call (parallel when independent).
-- Always output images as PNG files.
-- When generating for PowerPoint: use `--layout` to auto-select the correct
-  aspect ratio.
+- Output is always a PNG file.
+- Pick the aspect ratio with `--aspect-ratio` (default 16:9); it is validated
+  against the chosen model's supported set.
 - Every run emits exactly one JSON envelope on stdout (`{"status":"ok",...}` or
   `{"status":"error",...}`); parse it, react to errors, do not retry blindly.
 
@@ -59,8 +57,8 @@ store (macOS keychain / Windows certificate store), where corporate IT
 installed the Zscaler root, into Node's default CA set — so no env var, no
 shell prefix and **no bundled certificate** are needed. Just run it normally.
 
-Manual overrides remain for unusual setups (Node < 22.15 lacks the system-CA
-API, or a cert not in the OS store):
+Manual overrides remain for unusual setups (Node without
+`tls.setDefaultCACertificates`, e.g. Node 22.x, or a cert not in the OS store):
 
 - `NODE_EXTRA_CA_CERTS=/path/to/zscaler-root.crt` — a cert file outside the repo.
 - `NODE_OPTIONS=--use-system-ca` — the equivalent Node flag.
@@ -80,16 +78,16 @@ node <skill-dir/>/scripts/nano-banana.mjs \
 node <skill-dir/>/scripts/nano-banana.mjs \
   --prompt "..." --output image.png --aspect-ratio 2:3
 
-# With PowerPoint layout (auto-selects aspect ratio)
+# With a higher output resolution
 node <skill-dir/>/scripts/nano-banana.mjs \
-  --prompt "..." --output image.png --layout 0
+  --prompt "..." --output image.png --image-size 4K
 
-# With layout + specific placeholder (for multi-image layouts)
+# With a specific model + an extreme ratio (Nano Banana 2 only)
 node <skill-dir/>/scripts/nano-banana.mjs \
-  --prompt "..." --output image.png --layout 14 --placeholder 12
+  --prompt "..." --output image.png --model gemini-3.1-flash-image --aspect-ratio 1:4
 
-# List all layouts with image placeholders
-node <skill-dir/>/scripts/nano-banana.mjs --list-layouts
+# List all models with their supported ratios and resolutions
+node <skill-dir/>/scripts/nano-banana.mjs --list-models
 ```
 
 ### Arguments
@@ -98,49 +96,45 @@ node <skill-dir/>/scripts/nano-banana.mjs --list-layouts
 |----------|----------|---------|-------------|
 | `--prompt` | yes | -- | Image generation prompt (English recommended) |
 | `--output` | yes | -- | Output file path (PNG) |
-| `--aspect-ratio` | no | 16:9 | Manual aspect ratio (1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9) |
-| `--layout` | no | -- | PowerPoint layout index (overrides --aspect-ratio) |
-| `--placeholder` | no | -- | Placeholder index within layout (for multi-image layouts like Layout 14) |
+| `--aspect-ratio` | no | 16:9 | Aspect ratio; **model-dependent** set (see Models) |
+| `--image-size` | no | model default | Output resolution (`512`/`1K`/`2K`/`4K`); **model-dependent** |
+| `--model` | no | gemini-3-pro-image | Gemini model ID (see Models) |
 | `--key-file` | no | environment | Path to API key file (override; default reads env) |
-| `--model` | no | gemini-3-pro-image | Gemini model ID (Nano Banana Pro) |
+| `--list-models` | -- | -- | List models with supported ratios/resolutions and exit |
+
+Both `--flag value` and `--flag=value` are accepted; unknown flags are rejected.
 
 ### Models
 
 Default is **`gemini-3-pro-image`** (Nano Banana Pro, stable). The former
 `-preview` aliases are deprecated; prefer the stable ids.
 
-| Model ID | Name | Notes |
-|----------|------|-------|
-| `gemini-3-pro-image` | Nano Banana Pro | default, highest quality |
-| `gemini-3.1-flash-image` | Nano Banana 2 | faster, lower cost |
-| `gemini-2.5-flash-image` | Nano Banana | older, fastest |
+| Model ID | Tier | Aspect ratios | Resolutions |
+|----------|------|---------------|-------------|
+| `gemini-2.5-flash-image` | Nano Banana 1 | 10 standard | `1K` |
+| `gemini-3-pro-image` (default) | Nano Banana Pro | 10 standard | `1K`, `2K`, `4K` |
+| `gemini-3.1-flash-image` | Nano Banana 2 | 14 (standard + 4) | `512`, `1K`, `2K`, `4K` |
 
-## PowerPoint Layout Aspect Ratios
+- **Standard ratios (10):** `1:1, 4:5, 5:4, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9`
+- **Nano Banana 2 adds (4):** `1:4, 4:1, 1:8, 8:1` (ultra-wide / ultra-tall)
 
-When `--layout` is specified, the correct aspect ratio is automatically selected
-based on the msg systems Research template placeholder dimensions:
+`--aspect-ratio` and `--image-size` are each validated against the chosen
+model's set; an unsupported value (e.g. `1:4` or `512` on Pro, `2K` on Nano
+Banana 1) is a usage error (exit 2). Without `--image-size` the model uses its
+own default (~1K). Run `--list-models` for the full per-model lists.
 
-| Layout | Aspect | Layout Name |
-|--------|--------|-------------|
-| 0 | 2:3 | Title with image left |
-| 1 | 1:1 | Chapter with image |
-| 3 | 16:9 | Content 1 column with background |
-| 6 | 16:9 | Content 2 columns with background |
-| 8 | 16:9 | Content 3 columns with background |
-| 9 | 2:3 | Content with image left |
-| 10 | 1:1 | Content with image right |
-| 11 | 16:9 | Content with large image left |
-| 12 | 16:9 | Key message with background |
-| 14 | 1:1 | 2 Contacts (profile photos, 2 placeholders) |
-| 15 | 2:3 | Closing slide with image left |
+### Output and exit codes
 
-Layouts 2, 4, 5, 7, 13 have NO image placeholder.
+Every run prints exactly one JSON envelope on stdout (notes go to stderr):
+`{"status":"ok","file":...,"aspect_ratio":...,"model":...}` or
+`{"status":"error","message":...}`. Exit codes: `0` ok, `2` usage error
+(missing/invalid args), `1` runtime error (API/network/no image).
 
 ## Image Prompt Guidelines
 
-The corporate prompt formula, CI colors, camera/lighting/quality vocabulary and
+A generic prompt formula (Subject + Scene + Lighting + Camera + Quality) and
 worked examples live in `references/prompt-guidelines.md`. Read it before
-crafting a prompt for the msg systems Research style.
+crafting a prompt.
 
 ## Workflow
 
@@ -148,21 +142,18 @@ crafting a prompt for the msg systems Research style.
 
 1. User describes what image they need
 2. Craft a detailed prompt following `references/prompt-guidelines.md`
-3. Generate with appropriate aspect ratio
+3. Generate with an appropriate `--aspect-ratio`
 4. Show the user the output path and prompt used
 
-### PowerPoint Integration
+### Called by another skill
 
-When called from the PowerPoint skill workflow:
-
-1. Receive the slide layout index and image prompt
-2. Use `--layout` to auto-select the correct aspect ratio
-3. Save to `projects/<project>/img/slide<N>_ph<IDX>.png`
-4. Return the file path for insertion with `add-image --placeholder`
+When another skill needs an image, it passes the prompt and the desired
+`--aspect-ratio` (the caller knows the target geometry). Save to the path the
+caller specifies and return it from the JSON envelope.
 
 ### Batch Generation
 
-For generating multiple images (e.g., all slides in a presentation):
+For generating multiple images:
 - Execute each generation as a separate Bash call
 - Run them sequentially (API rate limiting)
-- Save with consistent naming: `slide0_ph11.png`, `slide1_ph13.png`, etc.
+- Save with consistent, caller-defined names

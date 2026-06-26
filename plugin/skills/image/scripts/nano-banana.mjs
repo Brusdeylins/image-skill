@@ -1937,7 +1937,7 @@ var require_dist2 = __commonJS({
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.HttpsProxyAgent = void 0;
     var net = __importStar(__require("net"));
-    var tls = __importStar(__require("tls"));
+    var tls2 = __importStar(__require("tls"));
     var assert_1 = __importDefault(__require("assert"));
     var debug_1 = __importDefault(require_src());
     var agent_base_1 = require_dist();
@@ -1982,7 +1982,7 @@ var require_dist2 = __commonJS({
         let socket;
         if (proxy.protocol === "https:") {
           debug("Creating `tls.Socket`: %o", this.connectOpts);
-          socket = tls.connect(setServernameFromNonIpHost(this.connectOpts));
+          socket = tls2.connect(setServernameFromNonIpHost(this.connectOpts));
         } else {
           debug("Creating `net.Socket`: %o", this.connectOpts);
           socket = net.connect(this.connectOpts);
@@ -2013,7 +2013,7 @@ var require_dist2 = __commonJS({
           req.once("socket", resume);
           if (opts.secureEndpoint) {
             debug("Upgrading socket connection to TLS");
-            return tls.connect({
+            return tls2.connect({
               ...omit(setServernameFromNonIpHost(opts), "host", "path", "port"),
               socket
             });
@@ -20975,7 +20975,7 @@ var require_websocket = __commonJS({
     var https2 = __require("https");
     var http3 = __require("http");
     var net = __require("net");
-    var tls = __require("tls");
+    var tls2 = __require("tls");
     var { randomBytes, createHash } = __require("crypto");
     var { Duplex, Readable: Readable2 } = __require("stream");
     var { URL: URL2 } = __require("url");
@@ -21725,7 +21725,7 @@ var require_websocket = __commonJS({
       if (!options.servername && options.servername !== "") {
         options.servername = net.isIP(options.host) ? "" : options.host;
       }
-      return tls.connect(options);
+      return tls2.connect(options);
     }
     function abortHandshake(websocket, stream, message) {
       websocket._readyState = WebSocket2.CLOSING;
@@ -26647,25 +26647,23 @@ var require_png = __commonJS({
 });
 
 // src/infra/args.ts
-var parseArgs = (argv, switches) => {
-  const options = {};
-  const flags = /* @__PURE__ */ new Set();
-  const isSwitch = new Set(switches);
-  for (let i2 = 0; i2 < argv.length; i2++) {
-    const token = argv[i2];
-    if (token === void 0 || !token.startsWith("--"))
-      continue;
-    const name = token.slice(2);
-    const next = argv[i2 + 1];
-    if (isSwitch.has(name) || next === void 0 || next.startsWith("--"))
-      flags.add(name);
-    else {
-      options[name] = next;
-      i2++;
-    }
+import { parseArgs as nodeParseArgs } from "node:util";
+var parseCli = (argv) => nodeParseArgs({
+  args: [...argv],
+  strict: true,
+  allowPositionals: false,
+  options: {
+    "prompt": { type: "string" },
+    "output": { type: "string" },
+    "aspect-ratio": { type: "string" },
+    "image-size": { type: "string" },
+    "model": { type: "string" },
+    "key-file": { type: "string" },
+    "list-models": { type: "boolean" },
+    "version": { type: "boolean" },
+    "help": { type: "boolean" }
   }
-  return { options, flags };
-};
+}).values;
 
 // src/infra/apikey.ts
 import { readFileSync } from "node:fs";
@@ -26688,17 +26686,30 @@ var resolveApiKey = (keyFile) => {
 };
 
 // src/infra/tls.ts
-import { getCACertificates, setDefaultCACertificates } from "node:tls";
+import { createRequire } from "node:module";
+var nodeRequire = createRequire(import.meta.url);
+var tls = nodeRequire("node:tls");
 var trustSystemCAs = () => {
-  if (typeof getCACertificates !== "function" || typeof setDefaultCACertificates !== "function")
+  if (typeof tls.getCACertificates !== "function" || typeof tls.setDefaultCACertificates !== "function")
     return;
   try {
-    const current = getCACertificates("default");
-    const system = getCACertificates("system");
+    const current = tls.getCACertificates("default");
+    const system = tls.getCACertificates("system");
     if (system.length > 0)
-      setDefaultCACertificates([...current, ...system]);
+      tls.setDefaultCACertificates([...current, ...system]);
   } catch {
   }
+};
+
+// src/infra/envelope.ts
+var emitOk = (env) => {
+  process.stdout.write(`${JSON.stringify(env)}
+`);
+};
+var fail = (message, code = 1) => {
+  process.stdout.write(`${JSON.stringify({ status: "error", message })}
+`);
+  process.exit(code);
 };
 
 // src/infra/version.ts
@@ -44765,17 +44776,23 @@ var toPng = (bytes, mimeType) => {
 
 // src/core/generate.ts
 var DEFAULT_MODEL = "gemini-3-pro-image";
+var DEFAULT_TIMEOUT_MS = 12e4;
 var generateImage = async (input) => {
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
+  const imageConfig = { aspectRatio: input.aspectRatio };
+  if (input.imageSize !== void 0)
+    imageConfig.imageSize = input.imageSize;
   const response = await ai.models.generateContent({
     model: input.model,
     contents: input.prompt,
     config: {
       responseModalities: ["IMAGE"],
-      imageConfig: { aspectRatio: input.aspectRatio }
+      imageConfig,
+      abortSignal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS)
     }
   });
-  const parts = response.candidates?.[0]?.content?.parts ?? [];
+  const candidate = response.candidates?.[0];
+  const parts = candidate?.content?.parts ?? [];
   for (const part of parts) {
     const data = part.inlineData?.data;
     if (data !== void 0 && data !== "") {
@@ -44784,177 +44801,153 @@ var generateImage = async (input) => {
       return { file: input.outputPath, aspectRatio: input.aspectRatio, model: input.model };
     }
   }
-  const blocked = response.promptFeedback?.blockReason;
-  throw new Error(blocked !== void 0 ? `No image returned: prompt blocked (${blocked})` : "No image returned by API");
+  const reason = response.promptFeedback?.blockReason ?? candidate?.finishReason;
+  const text = parts.map((part) => part.text).filter(Boolean).join(" ");
+  const detail = [reason, text].filter(Boolean).join(": ");
+  throw new Error(detail !== "" ? `No image returned (${detail})` : "No image returned by API");
 };
 
-// src/core/layouts.ts
-var ASPECT_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"];
+// src/core/aspect.ts
+var ASPECT_RATIOS = [
+  "1:1",
+  "4:5",
+  "5:4",
+  "2:3",
+  "3:2",
+  "3:4",
+  "4:3",
+  "9:16",
+  "16:9",
+  "21:9",
+  "1:4",
+  "4:1",
+  "1:8",
+  "8:1"
+];
 var isAspectRatio = (value) => ASPECT_RATIOS.includes(value);
-var LAYOUT_PLACEHOLDER_RATIOS = {
-  "0:11": "2:3",
-  /*  Titel-mit-Bild: portrait image left  */
-  "1:13": "1:1",
-  /*  Kapitel-mit-Bild: square-ish image right  */
-  "3:14": "16:9",
-  /*  Inhalt 1 Spalte mit Hintergrundbild: fullscreen  */
-  "6:14": "16:9",
-  /*  Inhalt 2 Spalten mit Hintergrundbild: fullscreen  */
-  "8:14": "16:9",
-  /*  Inhalt 3 Spalten mit Hintergrundbild: fullscreen  */
-  "9:14": "2:3",
-  /*  Inhalt mit Bild links: portrait image left  */
-  "10:14": "1:1",
-  /*  Inhalt mit Bild rechts: square-ish image right  */
-  "11:14": "16:9",
-  /*  Inhalt mit grossem Bild links: wide image left  */
-  "12:14": "16:9",
-  /*  Keymessage mit Hintergrundbild: fullscreen  */
-  "14:12": "1:1",
-  /*  2 Kontakte: profile photo 1  */
-  "14:13": "1:1",
-  /*  2 Kontakte: profile photo 2  */
-  "15:10": "2:3"
-  /*  Schlussfolie mit Bild: portrait image left  */
-};
-var LAYOUT_RATIOS = {
-  0: "2:3",
-  /*  Titel-mit-Bild  */
-  1: "1:1",
-  /*  Kapitel-mit-Bild  */
-  3: "16:9",
-  /*  Inhalt 1 Spalte mit Hintergrundbild  */
-  6: "16:9",
-  /*  Inhalt 2 Spalten mit Hintergrundbild  */
-  8: "16:9",
-  /*  Inhalt 3 Spalten mit Hintergrundbild  */
-  9: "2:3",
-  /*  Inhalt mit Bild links  */
-  10: "1:1",
-  /*  Inhalt mit Bild rechts  */
-  11: "16:9",
-  /*  Inhalt mit grossem Bild  */
-  12: "16:9",
-  /*  Keymessage mit Hintergrundbild  */
-  14: "1:1",
-  /*  2 Kontakte (profile photos)  */
-  15: "2:3"
-  /*  Schlussfolie mit Bild  */
-};
-var LAYOUT_NAMES = {
-  0: "Title with image left",
-  1: "Chapter with image",
-  3: "Content 1 column with background",
-  6: "Content 2 columns with background",
-  8: "Content 3 columns with background",
-  9: "Content with image left",
-  10: "Content with image right",
-  11: "Content with large image left",
-  12: "Key message with background",
-  14: "2 Contacts (profile photos)",
-  15: "Closing slide with image left"
-};
+
+// src/core/models.ts
+var STANDARD_RATIOS = ["1:1", "4:5", "5:4", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"];
+var IMAGE_SIZES = ["512", "1K", "2K", "4K"];
+var isImageSize = (value) => IMAGE_SIZES.includes(value);
+var MODELS = [
+  { id: "gemini-2.5-flash-image", name: "Nano Banana 1", imageSizes: ["1K"] },
+  { id: "gemini-3-pro-image", name: "Nano Banana Pro", imageSizes: ["1K", "2K", "4K"] },
+  { id: "gemini-3.1-flash-image", name: "Nano Banana 2", imageSizes: ["512", "1K", "2K", "4K"] }
+];
+var isNanoBanana2 = (model) => model.startsWith("gemini-3.1-flash-image");
+var aspectRatiosForModel = (model) => isNanoBanana2(model) ? ASPECT_RATIOS : STANDARD_RATIOS;
+var imageSizesForModel = (model) => MODELS.find((m2) => m2.id === model)?.imageSizes ?? IMAGE_SIZES;
 
 // src/cli/main.ts
-var SWITCHES = ["list-layouts", "help", "version"];
-var listLayouts = () => {
-  console.log("Layouts with image placeholders:");
-  console.log(`${"Layout".padStart(6)}  ${"Aspect".padStart(6)}  Name`);
-  console.log(`${"------".padStart(6)}  ${"------".padStart(6)}  ----`);
-  for (const idx of Object.keys(LAYOUT_NAMES).map(Number).sort((a, b) => a - b)) {
-    const ratio = LAYOUT_RATIOS[idx] ?? "16:9";
-    console.log(`${String(idx).padStart(6)}  ${ratio.padStart(6)}  ${LAYOUT_NAMES[idx]}`);
+var listModels = () => {
+  console.log("Models (Nano Banana tiers):");
+  for (const m2 of MODELS) {
+    const flag = m2.id === DEFAULT_MODEL ? "  (default)" : "";
+    const ratios = aspectRatiosForModel(m2.id);
+    console.log("");
+    console.log(`${m2.id}  (${m2.name})${flag}`);
+    console.log(`  resolutions: ${m2.imageSizes.join(", ")}`);
+    console.log(`  ratios (${ratios.length}): ${ratios.join(", ")}`);
   }
 };
 var HELP = `nano-banana ${VERSION} -- image generation via Google Nano Banana Pro (Gemini)
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
-  nano-banana --prompt "..." --output image.png --layout 0 [--placeholder 11]
-  nano-banana --list-layouts
+  nano-banana --prompt "..." --output image.png --model gemini-3.1-flash-image
+  nano-banana --list-models
 
 Options:
   --prompt <text>         image generation prompt (English recommended)   [required]
   --output <path>         output PNG path                                 [required]
-  --aspect-ratio <r>      ${ASPECT_RATIOS.join(", ")}   (default 16:9)
-  --layout <n>            PowerPoint layout index (overrides --aspect-ratio)
-  --placeholder <n>       placeholder index within layout (multi-image layouts)
+  --aspect-ratio <r>      10 standard ratios; gemini-3.1-flash-image adds 4
+                          ultra-wide/tall (see --list-models)   (default 16:9)
+  --image-size <s>        output resolution; model-dependent (see --list-models)
+                          (default: the model's own default, ~1K)
   --model <id>            Gemini model id (default ${DEFAULT_MODEL})
   --key-file <path>       read API key from a file (override; default: environment)
-  --list-layouts          list layouts with image placeholders and exit
+  --list-models           list models with supported ratios/resolution and exit
   --version               print version and exit
   --help                  print this help and exit
 
 API key:
   Read from GEMINI_API_KEY or GOOGLE_API_KEY. Never stored in the project.
+  --key-file overrides with a file outside the repo (CI secrets).
+
+Models (see --list-models):
+  gemini-2.5-flash-image   Nano Banana 1     10 ratios   1K
+  gemini-3-pro-image       Nano Banana Pro   10 ratios   1K/2K/4K        (default)
+  gemini-3.1-flash-image   Nano Banana 2     14 ratios   512/1K/2K/4K
+  Standard ratios (10): 1:1, 4:5, 5:4, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9
+  Nano Banana 2 adds (4): 1:4, 4:1, 1:8, 8:1   (ultra-wide / ultra-tall)
 
 Corporate proxy (Zscaler) TLS:
-  Run with  NODE_OPTIONS=--use-system-ca  (Node >= 22, trusts the macOS
-  keychain) or  NODE_EXTRA_CA_CERTS=/path/to/zscaler-root.crt.`;
-var resolveAspectRatio = (options) => {
-  const layoutRaw = options["layout"];
-  if (layoutRaw !== void 0) {
-    const layout = Number(layoutRaw);
-    const phRaw = options["placeholder"];
-    if (phRaw !== void 0) {
-      const key = `${layout}:${Number(phRaw)}`;
-      const ratio2 = LAYOUT_PLACEHOLDER_RATIOS[key];
-      if (ratio2 !== void 0) {
-        console.error(`Layout ${layout} ph ${Number(phRaw)} -> ${ratio2}`);
-        return ratio2;
-      }
-    }
-    const ratio = LAYOUT_RATIOS[layout];
-    if (ratio !== void 0) {
-      console.error(`Layout ${layout} (${LAYOUT_NAMES[layout] ?? "?"}) -> ${ratio}`);
-      return ratio;
-    }
-    console.error(`Warning: Layout ${layout} has no image placeholder, using default 16:9`);
-    return "16:9";
-  }
-  const explicit = options["aspect-ratio"] ?? "16:9";
-  if (!isAspectRatio(explicit)) {
-    console.error(`Error: invalid --aspect-ratio "${explicit}" (allowed: ${ASPECT_RATIOS.join(", ")})`);
-    process.exit(2);
-  }
+  Trusted automatically from the OS store; override with NODE_EXTRA_CA_CERTS or
+  NODE_OPTIONS=--use-system-ca if the Zscaler root is elsewhere.
+
+Output (exactly one JSON envelope on stdout; notes go to stderr):
+  ok:    {"status":"ok","file":"...","aspect_ratio":"...","model":"..."}
+  error: {"status":"error","message":"..."}
+
+Exit codes:
+  0  success
+  2  usage error (missing or invalid arguments)
+  1  runtime error (API, network, or no image returned)`;
+var resolveAspectRatio = (values, model) => {
+  const allowed = aspectRatiosForModel(model);
+  const explicit = values["aspect-ratio"] ?? "16:9";
+  if (!isAspectRatio(explicit) || !allowed.includes(explicit))
+    return fail(`--aspect-ratio "${explicit}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
   return explicit;
 };
 var main = async () => {
-  const { options, flags } = parseArgs(process.argv.slice(2), SWITCHES);
-  if (flags.has("help")) {
+  const values = parseCli(process.argv.slice(2));
+  if (values["help"] === true) {
     console.log(HELP);
     return;
   }
-  if (flags.has("version")) {
+  if (values["version"] === true) {
     console.log(`${PACKAGE} ${VERSION}`);
     return;
   }
-  if (flags.has("list-layouts")) {
-    listLayouts();
+  if (values["list-models"] === true) {
+    listModels();
     return;
   }
-  const prompt = options["prompt"];
-  const output = options["output"];
-  if (prompt === void 0 || output === void 0) {
-    console.error("Error: --prompt and --output are required (unless --list-layouts)");
-    process.exit(2);
+  const prompt = values["prompt"];
+  const output = values["output"];
+  if (prompt === void 0 || output === void 0)
+    return fail("--prompt and --output are required (unless --list-models)", 2);
+  const model = values["model"] ?? DEFAULT_MODEL;
+  const aspectRatio = resolveAspectRatio(values, model);
+  let imageSize;
+  const sizeRaw = values["image-size"];
+  if (sizeRaw !== void 0) {
+    const allowed = imageSizesForModel(model);
+    if (!isImageSize(sizeRaw) || !allowed.includes(sizeRaw))
+      return fail(`--image-size "${sizeRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
+    imageSize = sizeRaw;
   }
-  const apiKey = resolveApiKey(options["key-file"]);
-  const model = options["model"] ?? DEFAULT_MODEL;
-  const aspectRatio = resolveAspectRatio(options);
+  const apiKey = resolveApiKey(values["key-file"]);
   trustSystemCAs();
-  const result = await generateImage({ apiKey, prompt, outputPath: output, model, aspectRatio });
-  console.log(JSON.stringify({
+  const input = { apiKey, prompt, outputPath: output, model, aspectRatio };
+  if (imageSize !== void 0)
+    input.imageSize = imageSize;
+  const result = await generateImage(input);
+  const envelope = {
     status: "ok",
     file: result.file,
     aspect_ratio: result.aspectRatio,
     model: result.model
-  }));
+  };
+  if (imageSize !== void 0)
+    envelope.image_size = imageSize;
+  emitOk(envelope);
 };
 main().catch((err) => {
   const message = err instanceof Error ? err.message : String(err);
-  console.error(JSON.stringify({ status: "error", message }));
-  process.exit(1);
+  fail(message);
 });
 /*! Bundled license information:
 

@@ -5,9 +5,9 @@
 **
 **  core/png: normalize the API's image bytes to a TRUE PNG. The Gemini image
 **  model commonly returns JPEG; writing those bytes into a `.png` would make a
-**  mislabeled file that can trigger a PowerPoint repair when pptc inserts it.
-**  Pure-JS codecs are used (jpeg-js + pngjs) so the single-file esbuild bundle
-**  stays free of native modules.
+**  mislabeled file that downstream consumers (office tools, validators) may
+**  reject or try to repair. Pure-JS codecs are used (jpeg-js + pngjs) so the
+**  single-file esbuild bundle stays free of native modules.
 */
 
 import jpeg from "jpeg-js"

@@ -11,9 +11,19 @@
 **  certificate. It is a no-op on Node versions lacking the system-CA API,
 **  where NODE_EXTRA_CA_CERTS / NODE_OPTIONS=--use-system-ca remain the manual
 **  fallback.
+**
+**  The `node:tls` members are reached through the live module object via
+**  `createRequire`, NOT a static `import { setDefaultCACertificates }`: on Node
+**  versions where the lexer does not list that symbol as a named export (e.g.
+**  22.18), the static named import is a hard ESM load-time SyntaxError that
+**  would crash the whole CLI. Property access degrades to the runtime guard.
 */
 
-import { getCACertificates, setDefaultCACertificates } from "node:tls"
+import { createRequire } from "node:module"
+
+/**  live `node:tls` module object (members may be absent on older Node)  */
+const nodeRequire = createRequire(import.meta.url)
+const tls = nodeRequire("node:tls") as typeof import("node:tls")
 
 /**
  *  Add the OS trust store (incl. a corporate Zscaler root) to the default CA
@@ -22,13 +32,13 @@ import { getCACertificates, setDefaultCACertificates } from "node:tls"
  *  verifying. Failures are swallowed: the bundled defaults stay in force.
  */
 export const trustSystemCAs = (): void => {
-    if (typeof getCACertificates !== "function" || typeof setDefaultCACertificates !== "function")
+    if (typeof tls.getCACertificates !== "function" || typeof tls.setDefaultCACertificates !== "function")
         return
     try {
-        const current = getCACertificates("default")
-        const system  = getCACertificates("system")
+        const current = tls.getCACertificates("default")
+        const system  = tls.getCACertificates("system")
         if (system.length > 0)
-            setDefaultCACertificates([...current, ...system])
+            tls.setDefaultCACertificates([...current, ...system])
     }
     catch {
         /*  keep the bundled defaults; NODE_EXTRA_CA_CERTS still applies  */

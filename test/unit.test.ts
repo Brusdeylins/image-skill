@@ -8,42 +8,113 @@
 */
 
 import { describe, it, expect } from "vitest"
+import { execFileSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import jpeg from "jpeg-js"
 import { PNG } from "pngjs"
-import { parseArgs } from "../src/infra/args.js"
+
+/**  absolute path to the built CLI bundle (cwd-independent)  */
+const CLI_BUNDLE = fileURLToPath(new URL("../dst/nano-banana.mjs", import.meta.url))
+import { parseCli } from "../src/infra/args.js"
 import { resolveApiKey, KEY_ENV_VARS } from "../src/infra/apikey.js"
-import { isAspectRatio, LAYOUT_RATIOS, LAYOUT_PLACEHOLDER_RATIOS } from "../src/core/layouts.js"
+import { isAspectRatio } from "../src/core/aspect.js"
+import { aspectRatiosForModel, imageSizesForModel } from "../src/core/models.js"
 import { toPng } from "../src/core/png.js"
 
 /**  the 8-byte PNG signature, for asserting real PNG output  */
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
-describe("parseArgs", () => {
-    it("splits options from switches", () => {
-        const { options, flags } = parseArgs(
-            ["--prompt", "a cat", "--output", "c.png", "--list-layouts"],
-            ["list-layouts"])
-        expect(options["prompt"]).toBe("a cat")
-        expect(options["output"]).toBe("c.png")
-        expect(flags.has("list-layouts")).toBe(true)
+describe("parseCli", () => {
+    it("parses string options and boolean switches", () => {
+        const values = parseCli(["--prompt", "a cat", "--output", "c.png", "--list-models"])
+        expect(values["prompt"]).toBe("a cat")
+        expect(values["output"]).toBe("c.png")
+        expect(values["list-models"]).toBe(true)
     })
 
-    it("treats a value-less option before another flag as a switch", () => {
-        const { options, flags } = parseArgs(["--layout", "--prompt", "x"], [])
-        expect(flags.has("layout")).toBe(true)
-        expect(options["prompt"]).toBe("x")
+    it("keeps a `--`-prefixed value via the `=` form (P6)", () => {
+        const values = parseCli(["--prompt=--dramatic lighting", "--output", "c.png"])
+        expect(values["prompt"]).toBe("--dramatic lighting")
+    })
+
+    it("rejects an unknown flag", () => {
+        expect(() => parseCli(["--nope"])).toThrow()
     })
 })
 
-describe("layouts", () => {
-    it("narrows known aspect ratios", () => {
-        expect(isAspectRatio("16:9")).toBe(true)
-        expect(isAspectRatio("5:4")).toBe(false)
+describe("cli envelope", () => {
+    /*  run the built bundle and capture stdout + exit code  */
+    const runCli = (args: readonly string[]): { out: string, code: number } => {
+        try {
+            return { out: execFileSync("node", [CLI_BUNDLE, ...args], { encoding: "utf8" }), code: 0 }
+        }
+        catch (err) {
+            const e = err as { stdout?: string, status?: number }
+            return { out: e.stdout ?? "", code: e.status ?? 0 }
+        }
+    }
+
+    it("emits a JSON error envelope on missing args, non-zero exit (P1)", () => {
+        const { out, code } = runCli([])
+        const env = JSON.parse(out.trim()) as { status: string }
+        expect(env.status).toBe("error")
+        expect(code).not.toBe(0)
     })
 
-    it("maps layout 0 to portrait and a layout-14 placeholder to square", () => {
-        expect(LAYOUT_RATIOS[0]).toBe("2:3")
-        expect(LAYOUT_PLACEHOLDER_RATIOS["14:13"]).toBe("1:1")
+    it("rejects an extreme ratio on a model that does not support it", () => {
+        const { out, code } = runCli([
+            "--prompt", "x", "--output", "/tmp/nb-never.png",
+            "--model", "gemini-3-pro-image", "--aspect-ratio", "1:4"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("not supported by gemini-3-pro-image")
+        expect(code).not.toBe(0)
+    })
+
+    it("rejects a resolution the model does not support (Pro + 512)", () => {
+        const { out, code } = runCli([
+            "--prompt", "x", "--output", "/tmp/nb-never.png",
+            "--model", "gemini-3-pro-image", "--image-size", "512"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("--image-size \"512\" not supported by gemini-3-pro-image")
+        expect(code).not.toBe(0)
+    })
+})
+
+describe("aspect", () => {
+    it("narrows known aspect ratios", () => {
+        expect(isAspectRatio("16:9")).toBe(true)
+        expect(isAspectRatio("5:4")).toBe(true)
+        expect(isAspectRatio("7:5")).toBe(false)
+    })
+})
+
+describe("aspectRatiosForModel", () => {
+    it("gives 10 standard ratios to Pro and 2.5-flash, 14 to Nano Banana 2", () => {
+        expect(aspectRatiosForModel("gemini-3-pro-image")).toHaveLength(10)
+        expect(aspectRatiosForModel("gemini-2.5-flash-image")).toHaveLength(10)
+        expect(aspectRatiosForModel("gemini-3.1-flash-image")).toHaveLength(14)
+    })
+
+    it("offers the extreme ratios only on Nano Banana 2", () => {
+        expect(aspectRatiosForModel("gemini-3-pro-image")).not.toContain("1:4")
+        expect(aspectRatiosForModel("gemini-3.1-flash-image")).toContain("1:4")
+    })
+})
+
+describe("imageSizesForModel", () => {
+    it("gives 1K-only to 2.5-flash, 1K/2K/4K to Pro, +512 to Nano Banana 2", () => {
+        expect(imageSizesForModel("gemini-2.5-flash-image")).toEqual(["1K"])
+        expect(imageSizesForModel("gemini-3-pro-image")).toEqual(["1K", "2K", "4K"])
+        expect(imageSizesForModel("gemini-3.1-flash-image")).toEqual(["512", "1K", "2K", "4K"])
+    })
+
+    it("offers 512 only on Nano Banana 2", () => {
+        expect(imageSizesForModel("gemini-3-pro-image")).not.toContain("512")
+        expect(imageSizesForModel("gemini-3.1-flash-image")).toContain("512")
     })
 })
 

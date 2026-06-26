@@ -13,11 +13,15 @@
 import { writeFileSync } from "node:fs"
 import { GoogleGenAI } from "@google/genai"
 import { toPng } from "./png.js"
-import type { AspectRatio } from "./layouts.js"
+import type { AspectRatio } from "./aspect.js"
+import type { ImageSize } from "./models.js"
 
 /**  the default Gemini image model (Nano Banana Pro, stable -- the
  *  `-preview` alias is deprecated)  */
 export const DEFAULT_MODEL = "gemini-3-pro-image"
+
+/**  default request timeout in milliseconds; bounds a stalled API call  */
+export const DEFAULT_TIMEOUT_MS = 120_000
 
 /**  inputs for one image generation  */
 export interface GenerateInput {
@@ -31,6 +35,8 @@ export interface GenerateInput {
     model: string
     /**  the resolved aspect ratio  */
     aspectRatio: AspectRatio
+    /**  the requested output resolution; omitted to use the model default  */
+    imageSize?: ImageSize
 }
 
 /**  the successful result, mirrored onto the stdout JSON envelope  */
@@ -53,16 +59,23 @@ export interface GenerateResult {
 export const generateImage = async (input: GenerateInput): Promise<GenerateResult> => {
     const ai = new GoogleGenAI({ apiKey: input.apiKey })
 
+    const imageConfig: { aspectRatio: AspectRatio, imageSize?: ImageSize } =
+        { aspectRatio: input.aspectRatio }
+    if (input.imageSize !== undefined)
+        imageConfig.imageSize = input.imageSize
+
     const response = await ai.models.generateContent({
         model: input.model,
         contents: input.prompt,
         config: {
             responseModalities: ["IMAGE"],
-            imageConfig: { aspectRatio: input.aspectRatio }
+            imageConfig,
+            abortSignal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS)
         }
     })
 
-    const parts = response.candidates?.[0]?.content?.parts ?? []
+    const candidate = response.candidates?.[0]
+    const parts     = candidate?.content?.parts ?? []
     for (const part of parts) {
         const data = part.inlineData?.data
         if (data !== undefined && data !== "") {
@@ -72,8 +85,9 @@ export const generateImage = async (input: GenerateInput): Promise<GenerateResul
         }
     }
 
-    const blocked = response.promptFeedback?.blockReason
-    throw new Error(blocked !== undefined
-        ? `No image returned: prompt blocked (${blocked})`
-        : "No image returned by API")
+    /*  no image part: surface the most specific cause the API offered  */
+    const reason = response.promptFeedback?.blockReason ?? candidate?.finishReason
+    const text   = parts.map((part) => part.text).filter(Boolean).join(" ")
+    const detail = [reason, text].filter(Boolean).join(": ")
+    throw new Error(detail !== "" ? `No image returned (${detail})` : "No image returned by API")
 }
