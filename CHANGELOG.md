@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0
+## 0.9.0
 
 - Image-to-image: new repeatable `--input <path>` attaches reference images
   (1-14, PNG/JPEG/WEBP, <=7 MB each; mime type detected from magic bytes) for

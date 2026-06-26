@@ -26714,7 +26714,7 @@ var fail = (message, code = 1) => {
 };
 
 // src/infra/version.ts
-var VERSION = true ? "0.1.0" : "0.0.0-dev";
+var VERSION = true ? "0.9.0" : "0.0.0-dev";
 var PACKAGE = true ? "@brusdeylins/nano-banana" : "@brusdeylins/nano-banana";
 
 // src/core/generate.ts

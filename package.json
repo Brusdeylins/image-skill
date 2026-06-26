@@ -1,26 +1,27 @@
 {
   "name": "@brusdeylins/nano-banana",
-  "version": "0.1.0",
-  "description": "Deterministic image-generation CLI for LLM agents: Google Nano Banana Pro (Gemini Image API) with template-aware aspect ratios",
+  "version": "0.9.0",
+  "description": "Deterministic image-generation CLI for LLM agents: Google Nano Banana (Gemini Image API) -- text-to-image and image-to-image, model-aware aspect ratios and resolutions",
   "keywords": [
     "gemini",
     "nano-banana",
     "image-generation",
+    "image-editing",
+    "image-to-image",
     "cli",
     "llm",
     "agent",
-    "powerpoint",
     "aspect-ratio"
   ],
   "license": "MIT",
   "author": "Matthias Brusdeylins <brusdeylins@gmx.de>",
-  "homepage": "https://github.com/Brusdeylins/nano-banana",
+  "homepage": "https://github.com/brusdeylins/image-skill",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Brusdeylins/nano-banana.git"
+    "url": "git+https://github.com/brusdeylins/image-skill.git"
   },
   "bugs": {
-    "url": "https://github.com/Brusdeylins/nano-banana/issues"
+    "url": "https://github.com/brusdeylins/image-skill/issues"
   },
   "type": "module",
   "bin": {
