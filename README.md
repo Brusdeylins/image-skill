@@ -72,8 +72,13 @@ secret mounted outside the project (CI).
 # current shell session only
 export GEMINI_API_KEY="AIza..."
 
-# persist: append the export line to ~/.zshrc (zsh) or ~/.bashrc (bash)
-echo 'export GEMINI_API_KEY="AIza..."' >> ~/.zshrc
+# persist (zsh): use ~/.zshenv -- it is loaded by EVERY zsh instance,
+# including non-interactive ones (scripts, cron, CI, editor terminals).
+# ~/.zshrc is only read by interactive shells, so a script may not see it.
+echo 'export GEMINI_API_KEY="AIza..."' >> ~/.zshenv
+
+# persist (bash): ~/.bashrc (interactive) or ~/.bash_profile (login shells)
+echo 'export GEMINI_API_KEY="AIza..."' >> ~/.bashrc
 ```
 
 **Windows (PowerShell)**
