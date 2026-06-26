@@ -1,0 +1,19 @@
+{
+  "name": "image",
+  "version": "0.1.0",
+  "description": "Image-generation skill: produces professional images via Google Nano Banana Pro (Gemini Image API) with template-aware aspect ratios, driven by the bundled nano-banana CLI",
+  "author": {
+    "name": "Matthias Brusdeylins",
+    "email": "brusdeylins@gmx.de"
+  },
+  "homepage": "https://github.com/Brusdeylins/nano-banana",
+  "repository": "https://github.com/Brusdeylins/nano-banana",
+  "license": "MIT",
+  "keywords": [
+    "image-generation",
+    "gemini",
+    "nano-banana",
+    "powerpoint",
+    "aspect-ratio"
+  ]
+}

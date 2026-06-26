@@ -1,0 +1,14 @@
+node_modules/
+dst/
+*.tsbuildinfo
+.DS_Store
+test/tmp/
+~$*
+
+# Never commit secrets or corporate CA material
+*.key
+*.crt
+*.pem
+
+# ASE session state
+.ase/

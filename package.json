@@ -1,0 +1,62 @@
+{
+  "name": "@brusdeylins/nano-banana",
+  "version": "0.1.0",
+  "description": "Deterministic image-generation CLI for LLM agents: Google Nano Banana Pro (Gemini Image API) with template-aware aspect ratios",
+  "keywords": [
+    "gemini",
+    "nano-banana",
+    "image-generation",
+    "cli",
+    "llm",
+    "agent",
+    "powerpoint",
+    "aspect-ratio"
+  ],
+  "license": "MIT",
+  "author": "Matthias Brusdeylins <brusdeylins@gmx.de>",
+  "homepage": "https://github.com/Brusdeylins/nano-banana",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Brusdeylins/nano-banana.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Brusdeylins/nano-banana/issues"
+  },
+  "type": "module",
+  "bin": {
+    "nano-banana": "dst/nano-banana.mjs"
+  },
+  "files": [
+    "dst",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "plugin:sync": "npm run build && cp dst/nano-banana.mjs plugin/skills/image/scripts/nano-banana.mjs && node scripts/sync-versions.mjs",
+    "test": "vitest run",
+    "lint": "eslint src test && tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm run test && npm run build",
+    "pretest": "npm run build"
+  },
+  "dependencies": {
+    "@google/genai": "^1.30.0",
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.0.0",
+    "@types/pngjs": "^6.0.5",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "eslint-plugin-tsdoc": "^0.5.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
+    "vitest": "^4.1.9"
+  }
+}

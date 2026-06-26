@@ -1,0 +1,31 @@
+{
+    "name": "nano-banana",
+    "owner": {
+        "name": "Matthias Brusdeylins",
+        "email": "brusdeylins@gmx.de"
+    },
+    "metadata": {
+        "description": "Image-generation tooling: the nano-banana CLI and the template-aware image skill",
+        "version": "0.1.0"
+    },
+    "plugins": [
+        {
+            "name": "image",
+            "source": "./plugin",
+            "description": "Generates professional images via Google Nano Banana Pro (Gemini Image API) with template-aware aspect ratios, driven by the bundled nano-banana CLI",
+            "version": "0.1.0",
+            "author": {
+                "name": "Matthias Brusdeylins",
+                "email": "brusdeylins@gmx.de"
+            },
+            "license": "MIT",
+            "keywords": [
+                "image-generation",
+                "gemini",
+                "nano-banana",
+                "powerpoint"
+            ],
+            "category": "productivity"
+        }
+    ]
+}

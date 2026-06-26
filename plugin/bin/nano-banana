@@ -1,0 +1,3 @@
+#!/bin/sh
+# nano-banana -- thin PATH wrapper around the bundle shipped inside the skill
+exec node "$(dirname "$0")/../skills/image/scripts/nano-banana.mjs" "$@"
