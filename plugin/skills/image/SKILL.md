@@ -33,16 +33,21 @@ and marketing materials.
 
 ## API Key (environment only)
 
-The API key is **never stored in this project**. Provide it via environment:
+The API key is **never stored in this project**. It is read from the
+environment at call time, from `GEMINI_API_KEY` (or `GOOGLE_API_KEY`).
+`--key-file <path>` exists only as an override for a secret mounted OUTSIDE the
+project tree (CI).
 
-```
-GEMINI_API_KEY=...        # or GOOGLE_API_KEY=...
-```
+If the key is missing, the run fails with an actionable error. Tell the user to
+set the variable for their shell and stop:
 
-The key is read from the environment at call time. `--key-file <path>` exists
-only as an override for a secret mounted OUTSIDE the project tree (CI). If the
-key is missing, the run fails with an actionable error; tell the user to export
-`GEMINI_API_KEY` and stop.
+- **macOS / Linux (bash, zsh):** `export GEMINI_API_KEY="AIza..."`
+- **Windows (PowerShell):** `$env:GEMINI_API_KEY = "AIza..."` (session) or
+  `setx GEMINI_API_KEY "AIza..."` (persistent, reopen the terminal)
+- **Windows (cmd):** `set GEMINI_API_KEY=AIza...` (session) or
+  `setx GEMINI_API_KEY "AIza..."` (persistent)
+
+The README's "Setting the variable" section lists these in full.
 
 ## Corporate Proxy (Zscaler) TLS
 
@@ -51,14 +56,18 @@ proxy, TLS is intercepted, so the client must trust the Zscaler root CA. Node
 ships its own CA store and ignores the OS keychain by default. Supply trust at
 runtime — **never bundle a certificate into this project**:
 
-- **Preferred (Node >= 22):** `NODE_OPTIONS=--use-system-ca` — trusts the macOS
-  system keychain, where corporate IT already installed the Zscaler root.
+- **Preferred (Node >= 22):** `NODE_OPTIONS=--use-system-ca` — trusts the OS
+  trust store (macOS keychain / Windows certificate store), where corporate IT
+  already installed the Zscaler root.
 - **Fallback:** `NODE_EXTRA_CA_CERTS=/path/to/zscaler-root.crt` — a cert file
   living outside the repo.
 
+Set it per shell: macOS/Linux `NODE_OPTIONS=--use-system-ca node ...`;
+Windows PowerShell `$env:NODE_OPTIONS = "--use-system-ca"` then `node ...`.
+
 Outside the corporate network, no certificate is needed. If a run fails with a
 TLS/`unable to verify` error, instruct the user to re-run with
-`NODE_OPTIONS=--use-system-ca`.
+`--use-system-ca`.
 
 ## Command Reference
 

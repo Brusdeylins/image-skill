@@ -64,18 +64,70 @@ Read from `GEMINI_API_KEY` or `GOOGLE_API_KEY`. **Never** committed to the
 repository (`*.key` is git-ignored). `--key-file <path>` is an override for a
 secret mounted outside the project (CI).
 
+### Setting the variable
+
+**macOS / Linux (bash, zsh)**
+
+```bash
+# current shell session only
+export GEMINI_API_KEY="AIza..."
+
+# persist: append the export line to ~/.zshrc (zsh) or ~/.bashrc (bash)
+echo 'export GEMINI_API_KEY="AIza..."' >> ~/.zshrc
+```
+
+**Windows (PowerShell)**
+
+```powershell
+# current session only
+$env:GEMINI_API_KEY = "AIza..."
+
+# persist for the current user (new sessions; reopen the terminal)
+setx GEMINI_API_KEY "AIza..."
+```
+
+**Windows (cmd.exe)**
+
+```bat
+:: current session only
+set GEMINI_API_KEY=AIza...
+
+:: persist for the current user (new sessions; reopen the terminal)
+setx GEMINI_API_KEY "AIza..."
+```
+
+Verify it is set: `echo $GEMINI_API_KEY` (macOS/Linux),
+`echo $env:GEMINI_API_KEY` (PowerShell), `echo %GEMINI_API_KEY%` (cmd).
+
 ## Corporate proxy (Zscaler) TLS
 
 The CLI talks to the Gemini API over HTTPS. Behind a Zscaler proxy, TLS is
 intercepted and the client must trust the Zscaler root CA. Node uses its own CA
-store, so supply trust at runtime — **no certificate is bundled**:
+store, so supply trust at runtime — **no certificate is bundled**. The
+preferred way (Node >= 22) is `--use-system-ca`, which trusts the OS trust
+store where corporate IT already installed the Zscaler root (macOS keychain /
+Windows certificate store).
+
+**macOS / Linux (bash, zsh)**
 
 ```bash
-# Preferred (Node >= 22): trust the macOS system keychain
+# Preferred: trust the OS trust store
 NODE_OPTIONS=--use-system-ca node dst/nano-banana.mjs ...
 
 # Fallback: a cert file outside the repo
 NODE_EXTRA_CA_CERTS=$HOME/.certs/zscaler-root.crt node dst/nano-banana.mjs ...
+```
+
+**Windows (PowerShell)**
+
+```powershell
+# Preferred: trust the Windows certificate store
+$env:NODE_OPTIONS = "--use-system-ca"
+node dst/nano-banana.mjs ...
+
+# Fallback: a cert file outside the repo
+$env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\.certs\zscaler-root.crt"
+node dst/nano-banana.mjs ...
 ```
 
 Outside the corporate network no certificate is needed.
