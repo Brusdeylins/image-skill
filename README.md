@@ -107,35 +107,32 @@ Verify it is set: `echo $GEMINI_API_KEY` (macOS/Linux),
 ## Corporate proxy (Zscaler) TLS
 
 The CLI talks to the Gemini API over HTTPS. Behind a Zscaler proxy, TLS is
-intercepted and the client must trust the Zscaler root CA. Node uses its own CA
-store, so supply trust at runtime — **no certificate is bundled**. The
-preferred way (Node >= 22) is `--use-system-ca`, which trusts the OS trust
-store where corporate IT already installed the Zscaler root (macOS keychain /
-Windows certificate store).
+intercepted and the client must trust the Zscaler root CA.
 
-**macOS / Linux (bash, zsh)**
+**This is automatic.** On startup the CLI merges the OS trust store (macOS
+keychain / Windows certificate store) — where corporate IT installed the
+Zscaler root — into Node's default CA set (`tls.setDefaultCACertificates`). No
+env var, no shell prefix and **no bundled certificate** are needed; just run
+the tool normally. The merge extends, never replaces, the bundled roots, so
+public endpoints keep verifying. It is a no-op on Node < 22.15 (which lacks the
+system-CA API).
+
+Manual overrides remain available for unusual setups:
 
 ```bash
-# Preferred: trust the OS trust store
-NODE_OPTIONS=--use-system-ca node dst/nano-banana.mjs ...
-
-# Fallback: a cert file outside the repo
+# A cert file outside the repo (also covers Node < 22.15)
 NODE_EXTRA_CA_CERTS=$HOME/.certs/zscaler-root.crt node dst/nano-banana.mjs ...
 ```
 
-**Windows (PowerShell)**
-
 ```powershell
-# Preferred: trust the Windows certificate store
-$env:NODE_OPTIONS = "--use-system-ca"
-node dst/nano-banana.mjs ...
-
-# Fallback: a cert file outside the repo
+# Windows PowerShell
 $env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\.certs\zscaler-root.crt"
 node dst/nano-banana.mjs ...
 ```
 
-Outside the corporate network no certificate is needed.
+If a run still fails with a TLS / `unable to verify` error, the Zscaler root is
+not in the OS trust store — import it there, or point `NODE_EXTRA_CA_CERTS` at
+it. Outside the corporate network no certificate is needed.
 
 ## Release
 

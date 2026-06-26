@@ -52,22 +52,22 @@ The README's "Setting the variable" section lists these in full.
 ## Corporate Proxy (Zscaler) TLS
 
 The generator calls the Gemini API over HTTPS. Behind a corporate Zscaler
-proxy, TLS is intercepted, so the client must trust the Zscaler root CA. Node
-ships its own CA store and ignores the OS keychain by default. Supply trust at
-runtime — **never bundle a certificate into this project**:
+proxy, TLS is intercepted, so the client must trust the Zscaler root CA.
 
-- **Preferred (Node >= 22):** `NODE_OPTIONS=--use-system-ca` — trusts the OS
-  trust store (macOS keychain / Windows certificate store), where corporate IT
-  already installed the Zscaler root.
-- **Fallback:** `NODE_EXTRA_CA_CERTS=/path/to/zscaler-root.crt` — a cert file
-  living outside the repo.
+**This is handled automatically.** On startup the CLI merges the OS trust
+store (macOS keychain / Windows certificate store), where corporate IT
+installed the Zscaler root, into Node's default CA set — so no env var, no
+shell prefix and **no bundled certificate** are needed. Just run it normally.
 
-Set it per shell: macOS/Linux `NODE_OPTIONS=--use-system-ca node ...`;
-Windows PowerShell `$env:NODE_OPTIONS = "--use-system-ca"` then `node ...`.
+Manual overrides remain for unusual setups (Node < 22.15 lacks the system-CA
+API, or a cert not in the OS store):
 
-Outside the corporate network, no certificate is needed. If a run fails with a
-TLS/`unable to verify` error, instruct the user to re-run with
-`--use-system-ca`.
+- `NODE_EXTRA_CA_CERTS=/path/to/zscaler-root.crt` — a cert file outside the repo.
+- `NODE_OPTIONS=--use-system-ca` — the equivalent Node flag.
+
+If a run still fails with a TLS/`unable to verify` error, the Zscaler root is
+not in the user's OS trust store; tell the user to import it there (or set
+`NODE_EXTRA_CA_CERTS`).
 
 ## Command Reference
 

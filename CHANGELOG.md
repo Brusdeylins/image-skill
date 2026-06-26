@@ -13,7 +13,11 @@
   them.
 - API key read from `GEMINI_API_KEY` / `GOOGLE_API_KEY` only -- never stored in
   the project.
-- Corporate Zscaler TLS handled at runtime via `NODE_OPTIONS=--use-system-ca`
-  or `NODE_EXTRA_CA_CERTS`; no certificate is bundled.
+- Corporate Zscaler TLS handled automatically: on startup the CLI merges the OS
+  trust store (macOS keychain / Windows certificate store) into Node's default
+  CA set, so HTTPS works behind a TLS-intercepting proxy with no env var, no
+  shell prefix and no bundled certificate. `NODE_EXTRA_CA_CERTS` /
+  `NODE_OPTIONS=--use-system-ca` remain manual overrides (and the fallback on
+  Node < 22.15).
 - Claude Code plugin `image` with the bundled skill and a `nano-banana` PATH
   wrapper.

@@ -11,6 +11,7 @@
 
 import { parseArgs } from "../infra/args.js"
 import { resolveApiKey } from "../infra/apikey.js"
+import { trustSystemCAs } from "../infra/tls.js"
 import { VERSION, PACKAGE } from "../infra/version.js"
 import { generateImage, DEFAULT_MODEL } from "../core/generate.js"
 import {
@@ -124,6 +125,9 @@ const main = async (): Promise<void> => {
     const apiKey = resolveApiKey(options["key-file"])
     const model = options["model"] ?? DEFAULT_MODEL
     const aspectRatio = resolveAspectRatio(options)
+
+    /*  trust a corporate Zscaler root from the OS store before the HTTPS call  */
+    trustSystemCAs()
 
     const result = await generateImage({ apiKey, prompt, outputPath: output, model, aspectRatio })
     console.log(JSON.stringify({

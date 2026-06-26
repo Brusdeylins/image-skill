@@ -26687,6 +26687,20 @@ var resolveApiKey = (keyFile) => {
   );
 };
 
+// src/infra/tls.ts
+import { getCACertificates, setDefaultCACertificates } from "node:tls";
+var trustSystemCAs = () => {
+  if (typeof getCACertificates !== "function" || typeof setDefaultCACertificates !== "function")
+    return;
+  try {
+    const current = getCACertificates("default");
+    const system = getCACertificates("system");
+    if (system.length > 0)
+      setDefaultCACertificates([...current, ...system]);
+  } catch {
+  }
+};
+
 // src/infra/version.ts
 var VERSION = true ? "0.1.0" : "0.0.0-dev";
 var PACKAGE = true ? "@brusdeylins/nano-banana" : "@brusdeylins/nano-banana";
@@ -44928,6 +44942,7 @@ var main = async () => {
   const apiKey = resolveApiKey(options["key-file"]);
   const model = options["model"] ?? DEFAULT_MODEL;
   const aspectRatio = resolveAspectRatio(options);
+  trustSystemCAs();
   const result = await generateImage({ apiKey, prompt, outputPath: output, model, aspectRatio });
   console.log(JSON.stringify({
     status: "ok",
