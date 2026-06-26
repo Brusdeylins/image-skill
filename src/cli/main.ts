@@ -19,6 +19,7 @@ import {
     MODELS, aspectRatiosForModel, imageSizesForModel, isImageSize, type ImageSize
 } from "../core/models.js"
 import { isAspectRatio, type AspectRatio } from "../core/aspect.js"
+import { readInputImage, MAX_INPUT_IMAGES, type InputImage } from "../infra/imagefile.js"
 
 /**  print each model with its supported resolutions and aspect ratios  */
 const listModels = (): void => {
@@ -38,12 +39,13 @@ const HELP = `nano-banana ${VERSION} -- image generation via Google Nano Banana 
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
-  nano-banana --prompt "..." --output image.png --model gemini-3.1-flash-image
+  nano-banana --prompt "edit: ..." --input ref.png --output out.png
   nano-banana --list-models
 
 Options:
   --prompt <text>         image generation prompt (English recommended)   [required]
   --output <path>         output PNG path                                 [required]
+  --input <path>          reference image for image-to-image; repeatable (1-${MAX_INPUT_IMAGES})
   --aspect-ratio <r>      10 standard ratios; gemini-3.1-flash-image adds 4
                           ultra-wide/tall (see --list-models)   (default 16:9)
   --image-size <s>        output resolution; model-dependent (see --list-models)
@@ -128,6 +130,19 @@ const main = async (): Promise<void> => {
         imageSize = sizeRaw
     }
 
+    let inputImages: InputImage[] | undefined
+    const inputPaths = values["input"]
+    if (inputPaths !== undefined && inputPaths.length > 0) {
+        if (inputPaths.length > MAX_INPUT_IMAGES)
+            return fail(`too many --input images: ${inputPaths.length} (max ${MAX_INPUT_IMAGES})`, 2)
+        try {
+            inputImages = inputPaths.map(readInputImage)
+        }
+        catch (err) {
+            return fail(err instanceof Error ? err.message : String(err), 2)
+        }
+    }
+
     const apiKey = resolveApiKey(values["key-file"])
 
     /*  trust a corporate Zscaler root from the OS store before the HTTPS call  */
@@ -136,6 +151,8 @@ const main = async (): Promise<void> => {
     const input: GenerateInput = { apiKey, prompt, outputPath: output, model, aspectRatio }
     if (imageSize !== undefined)
         input.imageSize = imageSize
+    if (inputImages !== undefined)
+        input.inputImages = inputImages
 
     const result = await generateImage(input)
     const envelope: OkEnvelope = {

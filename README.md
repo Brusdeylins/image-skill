@@ -15,8 +15,9 @@ nano-banana-project/
     cli/main.ts                CLI entry point (arg parsing, JSON envelope)
     core/generate.ts           Gemini Image API call (@google/genai)
     core/aspect.ts             accepted aspect ratios + guard
-    core/models.ts             model tiers + per-model ratio support
+    core/models.ts             model tiers + per-model ratio/resolution support
     infra/apikey.ts            env-only API key resolution
+    infra/imagefile.ts         read/validate reference input images
     infra/args.ts              tiny --flag parser
     infra/version.ts           build-injected version facts
   scripts/
@@ -51,6 +52,7 @@ export GEMINI_API_KEY=...
 node dst/nano-banana.mjs --prompt "a red sports car at dusk" --output car.png
 node dst/nano-banana.mjs --prompt "..." --output portrait.png --aspect-ratio 2:3
 node dst/nano-banana.mjs --prompt "..." --output hi.png --image-size 4K
+node dst/nano-banana.mjs --prompt "make the car blue" --input car.png --output blue.png
 node dst/nano-banana.mjs --list-models
 ```
 
@@ -62,8 +64,9 @@ Run `nano-banana --help` for the same reference at the terminal.
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
-| `--prompt <text>` | yes | — | image generation prompt (English recommended) |
+| `--prompt <text>` | yes | — | image generation/edit prompt (English recommended) |
 | `--output <path>` | yes | — | output PNG path |
+| `--input <path>` | no | — | reference image for image-to-image; **repeatable** (1–14, PNG/JPEG/WEBP, ≤7 MB each) |
 | `--aspect-ratio <r>` | no | `16:9` | aspect ratio; the allowed set is **model-dependent** (see below) |
 | `--image-size <s>` | no | model default | output resolution (`512`/`1K`/`2K`/`4K`); the allowed set is **model-dependent** |
 | `--model <id>` | no | `gemini-3-pro-image` | Gemini model id (see Models) |
@@ -92,6 +95,26 @@ model's set: passing an unsupported value (e.g. `1:4` or `512` to Pro, or `2K`
 to Nano Banana 1) is a usage error (exit 2). Without `--image-size` the model
 uses its own default (~1K). `--list-models` prints the full per-model ratios and
 resolutions.
+
+### Image-to-image (editing & composition)
+
+Pass one or more reference images with `--input` (repeatable) to edit, restyle,
+or compose instead of generating from text alone. Up to **14** images per call,
+**PNG/JPEG/WEBP**, **≤7 MB** each (the mime type is detected from the file's
+magic bytes, not its extension).
+
+```bash
+# recolor / retouch a single image
+node dst/nano-banana.mjs --prompt "change the jacket to crimson red, keep the rest" \
+  --input person.png --output recolored.png
+
+# compose from several references
+node dst/nano-banana.mjs --prompt "put the product from image 1 on the desk in image 2" \
+  --input product.png --input desk.png --output scene.png
+```
+
+The prompt drives the edit (background replacement, style transfer, merging,
+character consistency, …). The output is still a true PNG.
 
 ### Output
 

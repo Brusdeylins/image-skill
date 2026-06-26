@@ -26655,6 +26655,7 @@ var parseCli = (argv) => nodeParseArgs({
   options: {
     "prompt": { type: "string" },
     "output": { type: "string" },
+    "input": { type: "string", multiple: true },
     "aspect-ratio": { type: "string" },
     "image-size": { type: "string" },
     "model": { type: "string" },
@@ -44782,9 +44783,13 @@ var generateImage = async (input) => {
   const imageConfig = { aspectRatio: input.aspectRatio };
   if (input.imageSize !== void 0)
     imageConfig.imageSize = input.imageSize;
+  const contents = input.inputImages !== void 0 && input.inputImages.length > 0 ? [
+    { text: input.prompt },
+    ...input.inputImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))
+  ] : input.prompt;
   const response = await ai.models.generateContent({
     model: input.model,
-    contents: input.prompt,
+    contents,
     config: {
       responseModalities: ["IMAGE"],
       imageConfig,
@@ -44839,6 +44844,25 @@ var isNanoBanana2 = (model) => model.startsWith("gemini-3.1-flash-image");
 var aspectRatiosForModel = (model) => isNanoBanana2(model) ? ASPECT_RATIOS : STANDARD_RATIOS;
 var imageSizesForModel = (model) => MODELS.find((m2) => m2.id === model)?.imageSizes ?? IMAGE_SIZES;
 
+// src/infra/imagefile.ts
+import { readFileSync as readFileSync2 } from "node:fs";
+var MAX_INPUT_IMAGES = 14;
+var MAX_INPUT_BYTES = 7 * 1024 * 1024;
+var SIGNATURES = [
+  { mime: "image/png", test: (b) => b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) },
+  { mime: "image/jpeg", test: (b) => b.subarray(0, 2).equals(Buffer.from([255, 216])) },
+  { mime: "image/webp", test: (b) => b.subarray(0, 4).toString("ascii") === "RIFF" && b.subarray(8, 12).toString("ascii") === "WEBP" }
+];
+var readInputImage = (path2) => {
+  const bytes = readFileSync2(path2);
+  if (bytes.length > MAX_INPUT_BYTES)
+    throw new Error(`input image too large: ${path2} (${bytes.length} bytes, max ${MAX_INPUT_BYTES})`);
+  const sig = SIGNATURES.find((s2) => s2.test(bytes));
+  if (sig === void 0)
+    throw new Error(`unsupported input image format: ${path2} (expected PNG, JPEG or WEBP)`);
+  return { mimeType: sig.mime, data: bytes.toString("base64") };
+};
+
 // src/cli/main.ts
 var listModels = () => {
   console.log("Models (Nano Banana tiers):");
@@ -44855,12 +44879,13 @@ var HELP = `nano-banana ${VERSION} -- image generation via Google Nano Banana Pr
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
-  nano-banana --prompt "..." --output image.png --model gemini-3.1-flash-image
+  nano-banana --prompt "edit: ..." --input ref.png --output out.png
   nano-banana --list-models
 
 Options:
   --prompt <text>         image generation prompt (English recommended)   [required]
   --output <path>         output PNG path                                 [required]
+  --input <path>          reference image for image-to-image; repeatable (1-${MAX_INPUT_IMAGES})
   --aspect-ratio <r>      10 standard ratios; gemini-3.1-flash-image adds 4
                           ultra-wide/tall (see --list-models)   (default 16:9)
   --image-size <s>        output resolution; model-dependent (see --list-models)
@@ -44929,11 +44954,24 @@ var main = async () => {
       return fail(`--image-size "${sizeRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
     imageSize = sizeRaw;
   }
+  let inputImages;
+  const inputPaths = values["input"];
+  if (inputPaths !== void 0 && inputPaths.length > 0) {
+    if (inputPaths.length > MAX_INPUT_IMAGES)
+      return fail(`too many --input images: ${inputPaths.length} (max ${MAX_INPUT_IMAGES})`, 2);
+    try {
+      inputImages = inputPaths.map(readInputImage);
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err), 2);
+    }
+  }
   const apiKey = resolveApiKey(values["key-file"]);
   trustSystemCAs();
   const input = { apiKey, prompt, outputPath: output, model, aspectRatio };
   if (imageSize !== void 0)
     input.imageSize = imageSize;
+  if (inputImages !== void 0)
+    input.inputImages = inputImages;
   const result = await generateImage(input);
   const envelope = {
     status: "ok",

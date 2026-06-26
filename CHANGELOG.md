@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- Image-to-image: new repeatable `--input <path>` attaches reference images
+  (1-14, PNG/JPEG/WEBP, <=7 MB each; mime type detected from magic bytes) for
+  editing, restyling, background replacement, composition and character
+  consistency. The prompt and the images are sent together as one request.
 - Initial release. Node.js port of the former Python image-generation skill.
 - Default model is the stable `gemini-3-pro-image` (Nano Banana Pro); the
   `-preview` alias is deprecated. `gemini-3.1-flash-image` (Nano Banana 2) and

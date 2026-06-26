@@ -10,16 +10,20 @@
 import { describe, it, expect } from "vitest"
 import { execFileSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import { writeFileSync, rmSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 import jpeg from "jpeg-js"
 import { PNG } from "pngjs"
-
-/**  absolute path to the built CLI bundle (cwd-independent)  */
-const CLI_BUNDLE = fileURLToPath(new URL("../dst/nano-banana.mjs", import.meta.url))
 import { parseCli } from "../src/infra/args.js"
 import { resolveApiKey, KEY_ENV_VARS } from "../src/infra/apikey.js"
 import { isAspectRatio } from "../src/core/aspect.js"
 import { aspectRatiosForModel, imageSizesForModel } from "../src/core/models.js"
+import { readInputImage } from "../src/infra/imagefile.js"
 import { toPng } from "../src/core/png.js"
+
+/**  absolute path to the built CLI bundle (cwd-independent)  */
+const CLI_BUNDLE = fileURLToPath(new URL("../dst/nano-banana.mjs", import.meta.url))
 
 /**  the 8-byte PNG signature, for asserting real PNG output  */
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -80,6 +84,17 @@ describe("cli envelope", () => {
         const env = JSON.parse(out.trim()) as { status: string, message: string }
         expect(env.status).toBe("error")
         expect(env.message).toContain("--image-size \"512\" not supported by gemini-3-pro-image")
+        expect(code).not.toBe(0)
+    })
+
+    it("rejects more than the maximum number of --input images", () => {
+        const args = ["--prompt", "x", "--output", "/tmp/nb-never.png"]
+        for (let i = 0; i < 15; i++)
+            args.push("--input", "/tmp/nb-ref.png")
+        const { out, code } = runCli(args)
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("too many --input images")
         expect(code).not.toBe(0)
     })
 })
@@ -143,6 +158,43 @@ describe("toPng", () => {
     it("rejects an unsupported format", () => {
         expect(() => toPng(Buffer.from([0x00, 0x01, 0x02, 0x03]), "image/gif"))
             .toThrow(/Unsupported image format/)
+    })
+})
+
+describe("readInputImage", () => {
+    /*  a 2x2 opaque RGBA bitmap reused as codec input  */
+    const rgba = Buffer.from([
+        255, 0, 0, 255,   0, 255, 0, 255,
+        0, 0, 255, 255,   255, 255, 0, 255
+    ])
+
+    it("detects PNG and JPEG from magic bytes, base64-encoded", () => {
+        const png = new PNG({ width: 2, height: 2 })
+        png.data = Buffer.from(rgba)
+        const pngPath = join(tmpdir(), "nb-in.png")
+        const jpgPath = join(tmpdir(), "nb-in.jpg")
+        writeFileSync(pngPath, PNG.sync.write(png))
+        writeFileSync(jpgPath, Buffer.from(jpeg.encode({ data: rgba, width: 2, height: 2 }, 90).data))
+        try {
+            expect(readInputImage(pngPath).mimeType).toBe("image/png")
+            expect(readInputImage(jpgPath).mimeType).toBe("image/jpeg")
+            expect(readInputImage(pngPath).data).toMatch(/^[A-Za-z0-9+/]+=*$/)
+        }
+        finally {
+            rmSync(pngPath, { force: true })
+            rmSync(jpgPath, { force: true })
+        }
+    })
+
+    it("rejects an unsupported format", () => {
+        const badPath = join(tmpdir(), "nb-in.bin")
+        writeFileSync(badPath, Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04]))
+        try {
+            expect(() => readInputImage(badPath)).toThrow(/unsupported input image format/)
+        }
+        finally {
+            rmSync(badPath, { force: true })
+        }
     })
 })
 

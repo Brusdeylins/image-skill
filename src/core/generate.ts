@@ -15,6 +15,7 @@ import { GoogleGenAI } from "@google/genai"
 import { toPng } from "./png.js"
 import type { AspectRatio } from "./aspect.js"
 import type { ImageSize } from "./models.js"
+import type { InputImage } from "../infra/imagefile.js"
 
 /**  the default Gemini image model (Nano Banana Pro, stable -- the
  *  `-preview` alias is deprecated)  */
@@ -37,6 +38,8 @@ export interface GenerateInput {
     aspectRatio: AspectRatio
     /**  the requested output resolution; omitted to use the model default  */
     imageSize?: ImageSize
+    /**  reference images for image-to-image editing/composition  */
+    inputImages?: readonly InputImage[]
 }
 
 /**  the successful result, mirrored onto the stdout JSON envelope  */
@@ -64,9 +67,18 @@ export const generateImage = async (input: GenerateInput): Promise<GenerateResul
     if (input.imageSize !== undefined)
         imageConfig.imageSize = input.imageSize
 
+    /*  with reference images, send the prompt plus inline image parts; else
+        a bare prompt string  */
+    const contents = input.inputImages !== undefined && input.inputImages.length > 0
+        ? [
+            { text: input.prompt },
+            ...input.inputImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))
+          ]
+        : input.prompt
+
     const response = await ai.models.generateContent({
         model: input.model,
-        contents: input.prompt,
+        contents,
         config: {
             responseModalities: ["IMAGE"],
             imageConfig,

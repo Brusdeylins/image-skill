@@ -17,6 +17,8 @@ export interface CliValues {
     "prompt": string | undefined
     /**  output PNG path  */
     "output": string | undefined
+    /**  reference/input image paths (repeatable)  */
+    "input": string[] | undefined
     /**  explicit aspect ratio  */
     "aspect-ratio": string | undefined
     /**  output resolution  */
@@ -50,6 +52,7 @@ export const parseCli = (argv: readonly string[]): CliValues =>
         options: {
             "prompt":        { type: "string" },
             "output":        { type: "string" },
+            "input":         { type: "string", multiple: true },
             "aspect-ratio":  { type: "string" },
             "image-size":    { type: "string" },
             "model":         { type: "string" },

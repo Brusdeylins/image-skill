@@ -12,7 +12,20 @@ disable-model-invocation: false
 <!-- (c) Matthias Brusdeylins -->
 <!-- 100% agentic coded (Claude Code) -->
 
-You are an expert in professional photographic image generation.
+You are an expert in professional photographic image generation and editing.
+
+## Capabilities
+
+- **Text-to-image**: generate an image from a prompt (`--prompt` + `--output`).
+- **Image-to-image / editing**: pass one or more reference images with `--input`
+  (repeatable, 1-14) to edit, restyle, or compose. The model keeps subjects
+  consistent across edits. Examples: recolor/retouch, background replacement,
+  style transfer, merging a product into a scene, character consistency.
+- **Aspect ratio**: `--aspect-ratio` (model-dependent set).
+- **Resolution**: `--image-size` (`512`/`1K`/`2K`/`4K`, model-dependent).
+- **Model choice**: `--model` across the Nano Banana tiers (`--list-models`).
+
+Output is always a PNG; every run prints one JSON envelope on stdout.
 
 ## Execution Rules
 
@@ -78,6 +91,16 @@ node <skill-dir/>/scripts/nano-banana.mjs \
 node <skill-dir/>/scripts/nano-banana.mjs \
   --prompt "..." --output image.png --aspect-ratio 2:3
 
+# Image-to-image: edit a reference image (repeat --input for up to 14)
+node <skill-dir/>/scripts/nano-banana.mjs \
+  --prompt "change the jacket to crimson red, keep everything else" \
+  --input ref.png --output edited.png
+
+# Compose from several reference images
+node <skill-dir/>/scripts/nano-banana.mjs \
+  --prompt "place the product from image 1 onto the desk in image 2" \
+  --input product.png --input desk.png --output scene.png
+
 # With a higher output resolution
 node <skill-dir/>/scripts/nano-banana.mjs \
   --prompt "..." --output image.png --image-size 4K
@@ -94,8 +117,9 @@ node <skill-dir/>/scripts/nano-banana.mjs --list-models
 
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `--prompt` | yes | -- | Image generation prompt (English recommended) |
+| `--prompt` | yes | -- | Image generation/edit prompt (English recommended) |
 | `--output` | yes | -- | Output file path (PNG) |
+| `--input` | no | -- | Reference image for image-to-image; **repeatable** (1-14, PNG/JPEG/WEBP, <=7 MB each) |
 | `--aspect-ratio` | no | 16:9 | Aspect ratio; **model-dependent** set (see Models) |
 | `--image-size` | no | model default | Output resolution (`512`/`1K`/`2K`/`4K`); **model-dependent** |
 | `--model` | no | gemini-3-pro-image | Gemini model ID (see Models) |
