@@ -1,7 +1,7 @@
 {
   "name": "image",
-  "version": "0.9.0",
-  "description": "Image-generation skill: text-to-image and image-to-image via Google Nano Banana (Gemini Image API), with model-aware aspect ratios and resolutions, driven by the bundled nano-banana CLI",
+  "version": "0.10.0",
+  "description": "Image/video-generation skill: text-to-image, image-to-image and text/image-to-video via Google Nano Banana (Gemini Image API) and Veo (Gemini Video API), with model-aware aspect ratios and resolutions, driven by the bundled nano-banana CLI",
   "author": {
     "name": "Matthias Brusdeylins",
     "email": "brusdeylins@gmx.de"
@@ -12,8 +12,10 @@
   "keywords": [
     "image-generation",
     "image-editing",
+    "video-generation",
     "gemini",
     "nano-banana",
+    "veo",
     "aspect-ratio"
   ]
 }

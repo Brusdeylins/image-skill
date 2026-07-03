@@ -21,6 +21,10 @@ export interface OkEnvelope {
     model: string
     /**  the requested output resolution, when one was given  */
     image_size?: string
+    /**  the requested video resolution, when one was given  */
+    resolution?: string
+    /**  the requested video duration in seconds, when one was given  */
+    duration_seconds?: number
 }
 
 /**

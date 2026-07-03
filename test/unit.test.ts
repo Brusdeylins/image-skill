@@ -19,6 +19,9 @@ import { parseCli } from "../src/infra/args.js"
 import { resolveApiKey, KEY_ENV_VARS } from "../src/infra/apikey.js"
 import { isAspectRatio } from "../src/core/aspect.js"
 import { aspectRatiosForModel, imageSizesForModel } from "../src/core/models.js"
+import {
+    videoAspectRatiosForModel, videoResolutionsForModel, videoDurationsForModel
+} from "../src/core/video.js"
 import { readInputImage } from "../src/infra/imagefile.js"
 import { toPng } from "../src/core/png.js"
 
@@ -97,6 +100,59 @@ describe("cli envelope", () => {
         expect(env.message).toContain("too many --input images")
         expect(code).not.toBe(0)
     })
+
+    it("rejects the video-only options in image mode", () => {
+        const { out, code } = runCli([
+            "--prompt", "x", "--output", "/tmp/nb-never.png", "--resolution", "1080p"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("--resolution requires --video")
+        expect(code).not.toBe(0)
+    })
+
+    it("rejects --image-size in video mode", () => {
+        const { out, code } = runCli([
+            "--video", "--prompt", "x", "--output", "/tmp/nb-never.mp4", "--image-size", "2K"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("use --resolution with --video")
+        expect(code).not.toBe(0)
+    })
+
+    it("rejects a portrait ratio on a Veo 3.0 model", () => {
+        const { out, code } = runCli([
+            "--video", "--prompt", "x", "--output", "/tmp/nb-never.mp4",
+            "--model", "veo-3.0-generate-001", "--aspect-ratio", "9:16"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("not supported by veo-3.0-generate-001")
+        expect(code).not.toBe(0)
+    })
+
+    it("rejects a duration the video model does not support", () => {
+        const { out, code } = runCli([
+            "--video", "--prompt", "x", "--output", "/tmp/nb-never.mp4",
+            "--model", "veo-3.0-generate-001", "--duration", "4"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("--duration \"4\" not supported by veo-3.0-generate-001")
+        expect(code).not.toBe(0)
+    })
+
+    it("rejects more than one --input image in video mode", () => {
+        const { out, code } = runCli([
+            "--video", "--prompt", "x", "--output", "/tmp/nb-never.mp4",
+            "--input", "/tmp/nb-ref.png", "--input", "/tmp/nb-ref.png"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("too many --input images: 2 (max 1 with --video)")
+        expect(code).not.toBe(0)
+    })
 })
 
 describe("aspect", () => {
@@ -130,6 +186,28 @@ describe("imageSizesForModel", () => {
     it("offers 512 only on Nano Banana 2", () => {
         expect(imageSizesForModel("gemini-3-pro-image")).not.toContain("512")
         expect(imageSizesForModel("gemini-3.1-flash-image")).toContain("512")
+    })
+})
+
+describe("video model tables", () => {
+    it("gives 16:9-only to Veo 3.0, 16:9 + 9:16 to Veo 3.1", () => {
+        expect(videoAspectRatiosForModel("veo-3.0-generate-001")).toEqual(["16:9"])
+        expect(videoAspectRatiosForModel("veo-3.1-generate-preview")).toEqual(["16:9", "9:16"])
+    })
+
+    it("gives 720p/1080p to every Veo tier", () => {
+        expect(videoResolutionsForModel("veo-3.0-generate-001")).toEqual(["720p", "1080p"])
+        expect(videoResolutionsForModel("veo-3.1-lite-generate-preview")).toEqual(["720p", "1080p"])
+    })
+
+    it("gives 8s-only to Veo 3.0, 4/6/8s to Veo 3.1", () => {
+        expect(videoDurationsForModel("veo-3.0-fast-generate-001")).toEqual([8])
+        expect(videoDurationsForModel("veo-3.1-generate-preview")).toEqual([4, 6, 8])
+    })
+
+    it("does not second-guess an unknown Veo id", () => {
+        expect(videoAspectRatiosForModel("veo-9.9-generate-001")).toEqual(["16:9", "9:16"])
+        expect(videoDurationsForModel("veo-9.9-generate-001")).toEqual([4, 6, 8])
     })
 })
 

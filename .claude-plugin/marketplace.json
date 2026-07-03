@@ -5,15 +5,15 @@
         "email": "brusdeylins@gmx.de"
     },
     "metadata": {
-        "description": "Image-generation tooling: the nano-banana CLI and the image skill",
-        "version": "0.9.0"
+        "description": "Image/video-generation tooling: the nano-banana CLI and the image skill",
+        "version": "0.10.0"
     },
     "plugins": [
         {
             "name": "image",
             "source": "./plugin",
-            "description": "Generates and edits images via Google Nano Banana (Gemini Image API): text-to-image and image-to-image, model-aware ratios/resolutions, driven by the bundled nano-banana CLI",
-            "version": "0.9.0",
+            "description": "Generates and edits images and videos via Google Nano Banana (Gemini Image API) and Veo (Gemini Video API): text-to-image, image-to-image and text/image-to-video, model-aware ratios/resolutions, driven by the bundled nano-banana CLI",
+            "version": "0.10.0",
             "author": {
                 "name": "Matthias Brusdeylins",
                 "email": "brusdeylins@gmx.de"
@@ -22,8 +22,10 @@
             "keywords": [
                 "image-generation",
                 "image-editing",
+                "video-generation",
                 "gemini",
-                "nano-banana"
+                "nano-banana",
+                "veo"
             ],
             "category": "productivity"
         }

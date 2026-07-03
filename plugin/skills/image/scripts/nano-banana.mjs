@@ -26658,6 +26658,10 @@ var parseCli = (argv) => nodeParseArgs({
     "input": { type: "string", multiple: true },
     "aspect-ratio": { type: "string" },
     "image-size": { type: "string" },
+    "video": { type: "boolean" },
+    "resolution": { type: "string" },
+    "duration": { type: "string" },
+    "negative-prompt": { type: "string" },
     "model": { type: "string" },
     "key-file": { type: "string" },
     "list-models": { type: "boolean" },
@@ -26714,7 +26718,7 @@ var fail = (message, code = 1) => {
 };
 
 // src/infra/version.ts
-var VERSION = true ? "0.9.0" : "0.0.0-dev";
+var VERSION = true ? "0.10.0" : "0.0.0-dev";
 var PACKAGE = true ? "@brusdeylins/nano-banana" : "@brusdeylins/nano-banana";
 
 // src/core/generate.ts
@@ -44844,6 +44848,62 @@ var isNanoBanana2 = (model) => model.startsWith("gemini-3.1-flash-image");
 var aspectRatiosForModel = (model) => isNanoBanana2(model) ? ASPECT_RATIOS : STANDARD_RATIOS;
 var imageSizesForModel = (model) => MODELS.find((m2) => m2.id === model)?.imageSizes ?? IMAGE_SIZES;
 
+// src/core/video.ts
+import { writeFileSync as writeFileSync2 } from "node:fs";
+var DEFAULT_VIDEO_MODEL = "veo-3.0-generate-001";
+var VIDEO_POLL_MS = 1e4;
+var VIDEO_TIMEOUT_MS = 6e5;
+var VIDEO_RESOLUTIONS = ["720p", "1080p"];
+var isVideoResolution = (value) => VIDEO_RESOLUTIONS.includes(value);
+var VIDEO_DURATIONS = [4, 6, 8];
+var isVideoDuration = (value) => VIDEO_DURATIONS.includes(value);
+var VIDEO_MODELS = [
+  { id: "veo-3.0-generate-001", name: "Veo 3", aspectRatios: ["16:9"], resolutions: ["720p", "1080p"], durations: [8] },
+  { id: "veo-3.0-fast-generate-001", name: "Veo 3 Fast", aspectRatios: ["16:9"], resolutions: ["720p", "1080p"], durations: [8] },
+  { id: "veo-3.1-generate-preview", name: "Veo 3.1", aspectRatios: ["16:9", "9:16"], resolutions: ["720p", "1080p"], durations: [4, 6, 8] },
+  { id: "veo-3.1-fast-generate-preview", name: "Veo 3.1 Fast", aspectRatios: ["16:9", "9:16"], resolutions: ["720p", "1080p"], durations: [4, 6, 8] },
+  { id: "veo-3.1-lite-generate-preview", name: "Veo 3.1 Lite", aspectRatios: ["16:9", "9:16"], resolutions: ["720p", "1080p"], durations: [4, 6, 8] }
+];
+var videoAspectRatiosForModel = (model) => VIDEO_MODELS.find((m2) => m2.id === model)?.aspectRatios ?? ["16:9", "9:16"];
+var videoResolutionsForModel = (model) => VIDEO_MODELS.find((m2) => m2.id === model)?.resolutions ?? VIDEO_RESOLUTIONS;
+var videoDurationsForModel = (model) => VIDEO_MODELS.find((m2) => m2.id === model)?.durations ?? VIDEO_DURATIONS;
+var generateVideo = async (input) => {
+  const ai = new GoogleGenAI({ apiKey: input.apiKey });
+  const config = { aspectRatio: input.aspectRatio, numberOfVideos: 1 };
+  if (input.resolution !== void 0)
+    config.resolution = input.resolution;
+  if (input.durationSeconds !== void 0)
+    config.durationSeconds = input.durationSeconds;
+  if (input.negativePrompt !== void 0)
+    config.negativePrompt = input.negativePrompt;
+  const params = { model: input.model, prompt: input.prompt, config };
+  if (input.inputImage !== void 0)
+    params.image = { imageBytes: input.inputImage.data, mimeType: input.inputImage.mimeType };
+  let operation = await ai.models.generateVideos(params);
+  const deadline = Date.now() + VIDEO_TIMEOUT_MS;
+  while (operation.done !== true) {
+    if (Date.now() >= deadline)
+      throw new Error(`Video generation timed out after ${VIDEO_TIMEOUT_MS / 1e3}s (operation ${operation.name ?? "unknown"} still running)`);
+    process.stderr.write("video generation in progress...\n");
+    await new Promise((resolve) => setTimeout(resolve, VIDEO_POLL_MS));
+    operation = await ai.operations.getVideosOperation({ operation });
+  }
+  if (operation.error !== void 0) {
+    const message = typeof operation.error["message"] === "string" ? operation.error["message"] : JSON.stringify(operation.error);
+    throw new Error(`Video generation failed: ${message}`);
+  }
+  const video = operation.response?.generatedVideos?.[0]?.video;
+  if (video === void 0) {
+    const reasons = operation.response?.raiMediaFilteredReasons?.filter(Boolean).join("; ") ?? "";
+    throw new Error(reasons !== "" ? `No video returned (${reasons})` : "No video returned by API");
+  }
+  if (video.videoBytes !== void 0 && video.videoBytes !== "")
+    writeFileSync2(input.outputPath, Buffer.from(video.videoBytes, "base64"));
+  else
+    await ai.files.download({ file: video, downloadPath: input.outputPath });
+  return { file: input.outputPath, aspectRatio: input.aspectRatio, model: input.model };
+};
+
 // src/infra/imagefile.ts
 import { readFileSync as readFileSync2 } from "node:fs";
 var MAX_INPUT_IMAGES = 14;
@@ -44865,7 +44925,7 @@ var readInputImage = (path2) => {
 
 // src/cli/main.ts
 var listModels = () => {
-  console.log("Models (Nano Banana tiers):");
+  console.log("Image models (Nano Banana tiers):");
   for (const m2 of MODELS) {
     const flag = m2.id === DEFAULT_MODEL ? "  (default)" : "";
     const ratios = aspectRatiosForModel(m2.id);
@@ -44874,23 +44934,43 @@ var listModels = () => {
     console.log(`  resolutions: ${m2.imageSizes.join(", ")}`);
     console.log(`  ratios (${ratios.length}): ${ratios.join(", ")}`);
   }
+  console.log("");
+  console.log("Video models (Veo tiers, use with --video):");
+  for (const m2 of VIDEO_MODELS) {
+    const flag = m2.id === DEFAULT_VIDEO_MODEL ? "  (default)" : "";
+    console.log("");
+    console.log(`${m2.id}  (${m2.name})${flag}`);
+    console.log(`  resolutions: ${m2.resolutions.join(", ")}`);
+    console.log(`  ratios (${m2.aspectRatios.length}): ${m2.aspectRatios.join(", ")}`);
+    console.log(`  durations (s): ${m2.durations.join(", ")}`);
+  }
 };
-var HELP = `nano-banana ${VERSION} -- image generation via Google Nano Banana Pro (Gemini)
+var HELP = `nano-banana ${VERSION} -- image/video generation via Google Nano Banana + Veo (Gemini)
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
   nano-banana --prompt "edit: ..." --input ref.png --output out.png
+  nano-banana --video --prompt "..." --output clip.mp4 [--resolution 1080p]
   nano-banana --list-models
 
 Options:
-  --prompt <text>         image generation prompt (English recommended)   [required]
-  --output <path>         output PNG path                                 [required]
-  --input <path>          reference image for image-to-image; repeatable (1-${MAX_INPUT_IMAGES})
-  --aspect-ratio <r>      10 standard ratios; gemini-3.1-flash-image adds 4
-                          ultra-wide/tall (see --list-models)   (default 16:9)
-  --image-size <s>        output resolution; model-dependent (see --list-models)
+  --prompt <text>         generation prompt (English recommended)         [required]
+  --output <path>         output path: PNG (image) or MP4 (--video)       [required]
+  --input <path>          reference image; repeatable (1-${MAX_INPUT_IMAGES}) for image-to-image,
+                          exactly 1 for image-to-video (--video)
+  --aspect-ratio <r>      image: 10 standard ratios; gemini-3.1-flash-image adds 4
+                          ultra-wide/tall. video: 16:9; Veo 3.1 adds 9:16
+                          (see --list-models)   (default 16:9)
+  --image-size <s>        image output resolution; model-dependent (see --list-models)
                           (default: the model's own default, ~1K)
-  --model <id>            Gemini model id (default ${DEFAULT_MODEL})
+  --video                 generate a video (MP4) via Veo instead of an image
+  --resolution <r>        video resolution: 720p or 1080p (--video only)
+                          (default: the model's own default, 720p)
+  --duration <s>          video clip duration in seconds; model-dependent (--video
+                          only; Veo 3.0: 8; Veo 3.1: 4/6/8) (default: model's own)
+  --negative-prompt <t>   what the video must NOT contain (--video only)
+  --model <id>            Gemini model id (default: image ${DEFAULT_MODEL},
+                          video ${DEFAULT_VIDEO_MODEL})
   --key-file <path>       read API key from a file (override; default: environment)
   --list-models           list models with supported ratios/resolution and exit
   --version               print version and exit
@@ -44900,12 +44980,20 @@ API key:
   Read from GEMINI_API_KEY or GOOGLE_API_KEY. Never stored in the project.
   --key-file overrides with a file outside the repo (CI secrets).
 
-Models (see --list-models):
+Image models (see --list-models):
   gemini-2.5-flash-image   Nano Banana 1     10 ratios   1K
   gemini-3-pro-image       Nano Banana Pro   10 ratios   1K/2K/4K        (default)
   gemini-3.1-flash-image   Nano Banana 2     14 ratios   512/1K/2K/4K
   Standard ratios (10): 1:1, 4:5, 5:4, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9
   Nano Banana 2 adds (4): 1:4, 4:1, 1:8, 8:1   (ultra-wide / ultra-tall)
+
+Video models (see --list-models):
+  veo-3.0-generate-001          Veo 3         16:9        720p/1080p   8s   (default)
+  veo-3.0-fast-generate-001     Veo 3 Fast    16:9        720p/1080p   8s
+  veo-3.1-generate-preview      Veo 3.1       16:9/9:16   720p/1080p   4/6/8s
+  veo-3.1-fast-generate-preview Veo 3.1 Fast  16:9/9:16   720p/1080p   4/6/8s
+  veo-3.1-lite-generate-preview Veo 3.1 Lite  16:9/9:16   720p/1080p   4/6/8s
+  All Veo 3 tiers generate native audio. Generation takes 1-6 minutes.
 
 Corporate proxy (Zscaler) TLS:
   Trusted automatically from the OS store; override with NODE_EXTRA_CA_CERTS or
@@ -44918,9 +45006,8 @@ Output (exactly one JSON envelope on stdout; notes go to stderr):
 Exit codes:
   0  success
   2  usage error (missing or invalid arguments)
-  1  runtime error (API, network, or no image returned)`;
-var resolveAspectRatio = (values, model) => {
-  const allowed = aspectRatiosForModel(model);
+  1  runtime error (API, network, or no image/video returned)`;
+var resolveAspectRatio = (values, model, allowed) => {
   const explicit = values["aspect-ratio"] ?? "16:9";
   if (!isAspectRatio(explicit) || !allowed.includes(explicit))
     return fail(`--aspect-ratio "${explicit}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
@@ -44944,8 +45031,19 @@ var main = async () => {
   const output = values["output"];
   if (prompt === void 0 || output === void 0)
     return fail("--prompt and --output are required (unless --list-models)", 2);
-  const model = values["model"] ?? DEFAULT_MODEL;
-  const aspectRatio = resolveAspectRatio(values, model);
+  const video = values["video"] === true;
+  const model = values["model"] ?? (video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL);
+  if (!video) {
+    for (const flag of ["resolution", "duration", "negative-prompt"])
+      if (values[flag] !== void 0)
+        return fail(`--${flag} requires --video`, 2);
+  } else if (values["image-size"] !== void 0)
+    return fail("--image-size is an image option; use --resolution with --video", 2);
+  const aspectRatio = resolveAspectRatio(
+    values,
+    model,
+    video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model)
+  );
   let imageSize;
   const sizeRaw = values["image-size"];
   if (sizeRaw !== void 0) {
@@ -44954,11 +45052,29 @@ var main = async () => {
       return fail(`--image-size "${sizeRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
     imageSize = sizeRaw;
   }
+  let resolution;
+  const resolutionRaw = values["resolution"];
+  if (resolutionRaw !== void 0) {
+    const allowed = videoResolutionsForModel(model);
+    if (!isVideoResolution(resolutionRaw) || !allowed.includes(resolutionRaw))
+      return fail(`--resolution "${resolutionRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
+    resolution = resolutionRaw;
+  }
+  let duration;
+  const durationRaw = values["duration"];
+  if (durationRaw !== void 0) {
+    const allowed = videoDurationsForModel(model);
+    const seconds = Number(durationRaw);
+    if (!Number.isInteger(seconds) || !isVideoDuration(seconds) || !allowed.includes(seconds))
+      return fail(`--duration "${durationRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
+    duration = seconds;
+  }
   let inputImages;
   const inputPaths = values["input"];
   if (inputPaths !== void 0 && inputPaths.length > 0) {
-    if (inputPaths.length > MAX_INPUT_IMAGES)
-      return fail(`too many --input images: ${inputPaths.length} (max ${MAX_INPUT_IMAGES})`, 2);
+    const maxInputs = video ? 1 : MAX_INPUT_IMAGES;
+    if (inputPaths.length > maxInputs)
+      return fail(`too many --input images: ${inputPaths.length} (max ${maxInputs}${video ? " with --video" : ""})`, 2);
     try {
       inputImages = inputPaths.map(readInputImage);
     } catch (err) {
@@ -44967,6 +45083,31 @@ var main = async () => {
   }
   const apiKey = resolveApiKey(values["key-file"]);
   trustSystemCAs();
+  if (video) {
+    const input2 = { apiKey, prompt, outputPath: output, model, aspectRatio };
+    if (resolution !== void 0)
+      input2.resolution = resolution;
+    if (duration !== void 0)
+      input2.durationSeconds = duration;
+    if (values["negative-prompt"] !== void 0)
+      input2.negativePrompt = values["negative-prompt"];
+    const firstImage = inputImages?.[0];
+    if (firstImage !== void 0)
+      input2.inputImage = firstImage;
+    const result2 = await generateVideo(input2);
+    const envelope2 = {
+      status: "ok",
+      file: result2.file,
+      aspect_ratio: result2.aspectRatio,
+      model: result2.model
+    };
+    if (resolution !== void 0)
+      envelope2.resolution = resolution;
+    if (duration !== void 0)
+      envelope2.duration_seconds = duration;
+    emitOk(envelope2);
+    return;
+  }
   const input = { apiKey, prompt, outputPath: output, model, aspectRatio };
   if (imageSize !== void 0)
     input.imageSize = imageSize;

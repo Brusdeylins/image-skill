@@ -23,6 +23,14 @@ export interface CliValues {
     "aspect-ratio": string | undefined
     /**  output resolution  */
     "image-size": string | undefined
+    /**  video mode switch (Veo)  */
+    "video": boolean | undefined
+    /**  video output resolution  */
+    "resolution": string | undefined
+    /**  video clip duration in seconds  */
+    "duration": string | undefined
+    /**  what the video must NOT contain  */
+    "negative-prompt": string | undefined
     /**  Gemini model id  */
     "model": string | undefined
     /**  path to an API key file (override)  */
@@ -55,6 +63,10 @@ export const parseCli = (argv: readonly string[]): CliValues =>
             "input":         { type: "string", multiple: true },
             "aspect-ratio":  { type: "string" },
             "image-size":    { type: "string" },
+            "video":         { type: "boolean" },
+            "resolution":    { type: "string" },
+            "duration":      { type: "string" },
+            "negative-prompt": { type: "string" },
             "model":         { type: "string" },
             "key-file":      { type: "string" },
             "list-models":   { type: "boolean" },

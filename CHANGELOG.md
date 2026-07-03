@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.10.0
+
+- Video generation via Google Veo (Gemini Video API): new `--video` switch
+  writes an MP4 clip (with native audio) instead of a PNG. Veo runs as a
+  long-running operation; the CLI polls every 10 s (progress notes on stderr)
+  and times out after 10 minutes.
+- Video models: `veo-3.0-generate-001` (Veo 3, GA, default) and
+  `veo-3.0-fast-generate-001` (16:9, 8 s), plus the `veo-3.1-generate-preview`
+  / `-fast` / `-lite` preview tiers adding portrait `9:16` and 4/6 s
+  durations. All tiers offer `720p`/`1080p`.
+- New video options, each validated against the chosen model's set:
+  `--resolution <720p|1080p>`, `--duration <4|6|8>` and `--negative-prompt`;
+  they are usage errors without `--video`, as is `--image-size` with it. The
+  requested values are echoed back as `resolution` / `duration_seconds` in the
+  ok envelope.
+- Image-to-video: exactly one `--input` image seeds the clip (the existing
+  PNG/JPEG/WEBP reader with magic-byte detection is reused).
+- `--list-models` and `--help` now cover both the Nano Banana image tiers and
+  the Veo video tiers.
+- Image model ids verified against the current Gemini API docs: the tiers
+  (`gemini-2.5-flash-image`, `gemini-3-pro-image`, `gemini-3.1-flash-image`)
+  are unchanged; no renames needed.
+- README: new "Install as a Claude Code plugin" section -- the repository is a
+  plugin marketplace, so the Git URL serves as the marketplace source
+  (`/plugin marketplace add https://github.com/Brusdeylins/image-skill.git`,
+  then `/plugin install image@nano-banana`).
+
 ## 0.9.0
 
 - Image-to-image: new repeatable `--input <path>` attaches reference images

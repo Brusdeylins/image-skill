@@ -1,13 +1,16 @@
 {
   "name": "@brusdeylins/nano-banana",
-  "version": "0.9.0",
-  "description": "Deterministic image-generation CLI for LLM agents: Google Nano Banana (Gemini Image API) -- text-to-image and image-to-image, model-aware aspect ratios and resolutions",
+  "version": "0.10.0",
+  "description": "Deterministic image/video-generation CLI for LLM agents: Google Nano Banana (Gemini Image API) and Veo (Gemini Video API) -- text-to-image, image-to-image and text/image-to-video, model-aware aspect ratios and resolutions",
   "keywords": [
     "gemini",
     "nano-banana",
+    "veo",
     "image-generation",
     "image-editing",
     "image-to-image",
+    "video-generation",
+    "image-to-video",
     "cli",
     "llm",
     "agent",
