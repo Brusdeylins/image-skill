@@ -43,7 +43,8 @@ envelope on stdout.
 - Run the generator as `node <skill-dir/>/scripts/nano-banana.mjs <args>`
   (needs Node >= 20; if `node --version` fails, tell the user to install Node
   20+ and stop).
-- Execute each Bash call as a separate tool call (parallel when independent).
+- Execute each Bash call as a separate tool call (parallel when independent,
+  except large batches -- see Batch Generation below).
 - Output is a PNG file, or an MP4 file with `--video`.
 - Pick the aspect ratio with `--aspect-ratio` (default 16:9); it is validated
   against the chosen model's supported set.
@@ -68,8 +69,6 @@ set the variable for their shell and stop:
   `setx GEMINI_API_KEY "AIza..."` (persistent, reopen the terminal)
 - **Windows (cmd):** `set GEMINI_API_KEY=AIza...` (session) or
   `setx GEMINI_API_KEY "AIza..."` (persistent)
-
-The README's "Setting the variable" section lists these in full.
 
 ## Corporate Proxy (Zscaler) TLS
 

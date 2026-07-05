@@ -9,7 +9,9 @@ prompts work best.
 
 - **Subject**: the main focus, described concretely (who/what, pose, wardrobe,
   colours). Name an accent colour explicitly when it matters
-  (e.g. "a crimson red `#A01441` blazer").
+  (e.g. "a crimson red `#A01441` blazer" -- the hex values throughout this
+  file are illustrative placeholders; substitute the user's own brand
+  colours).
 - **Scene / setting**: where it happens and any background detail.
 - **Lighting**: "soft diffused light", "golden hour backlighting",
   "studio three-point lighting".

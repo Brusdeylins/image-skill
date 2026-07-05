@@ -4,19 +4,18 @@ Professional image generation for Claude Code, built on the bundled
 [nano-banana](../README.md) CLI and **Google Nano Banana Pro** (Gemini Image
 API). The plugin ships **one skill**:
 
-- **`image`** -- crafts a prompt and generates a PNG, with template-aware
-  aspect ratios for the msg systems Research PowerPoint layouts.
+- **`image`** -- crafts a prompt and generates a PNG or MP4 via the Gemini
+  Image and Veo APIs.
 
 ## What the skill does
 
-- **Corporate-style prompts**: a fixed formula (CI accent #A01441, camera,
-  lighting, quality) yields on-brand, editorial-quality images.
-- **Template-aware aspect ratios**: `--layout` / `--placeholder` resolve the
-  real placeholder ratios of the PowerPoint template, so a slide image fills
-  its frame without distortion.
-- **Deterministic output**: every run emits one JSON envelope on stdout.
-- **PowerPoint integration**: triggered by the `ppt` skill to fill picture
-  placeholders.
+- **Text-to-image / image-to-image**: generate a PNG from a prompt, or edit / compose
+  from up to 14 reference images (`--input`), via Google Nano Banana (Gemini Image API).
+- **Text/image-to-video**: generate an MP4 clip with native audio via Google Veo
+  (`--video`).
+- **Model-aware geometry**: `--aspect-ratio`, `--image-size`, `--resolution` and
+  `--duration` are each validated against the chosen model's supported set.
+- **Deterministic output**: every run emits exactly one JSON envelope on stdout.
 
 ## Requirements
 
