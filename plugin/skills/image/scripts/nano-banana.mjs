@@ -26653,6 +26653,7 @@ var parseCli = (argv) => nodeParseArgs({
   strict: true,
   allowPositionals: false,
   options: {
+    "provider": { type: "string" },
     "prompt": { type: "string" },
     "output": { type: "string" },
     "input": { type: "string", multiple: true },
@@ -26673,20 +26674,22 @@ var parseCli = (argv) => nodeParseArgs({
 // src/infra/apikey.ts
 import { readFileSync } from "node:fs";
 var KEY_ENV_VARS = ["GEMINI_API_KEY", "GOOGLE_API_KEY"];
-var resolveApiKey = (keyFile) => {
+var ATLAS_KEY_ENV_VARS = ["ATLASCLOUD_API_KEY", "ATLAS_CLOUD_API_KEY"];
+var resolveApiKey = (keyFile, provider = "gemini") => {
   if (keyFile !== void 0) {
     const key = readFileSync(keyFile, "utf8").trim();
     if (key === "")
       throw new Error(`API key file is empty: ${keyFile}`);
     return key;
   }
-  for (const name of KEY_ENV_VARS) {
+  const envVars = provider === "atlas" ? ATLAS_KEY_ENV_VARS : KEY_ENV_VARS;
+  for (const name of envVars) {
     const value = process.env[name]?.trim();
     if (value !== void 0 && value !== "")
       return value;
   }
   throw new Error(
-    `No API key found. Set ${KEY_ENV_VARS.join(" or ")} in the environment, or pass --key-file <path>. The key is NEVER stored in this project.`
+    `No ${provider === "atlas" ? "Atlas Cloud" : "Gemini"} API key found. Set ${envVars.join(" or ")} in the environment, or pass --key-file <path>. The key is NEVER stored in this project.`
   );
 };
 
@@ -44923,6 +44926,115 @@ var readInputImage = (path2) => {
   return { mimeType: sig.mime, data: bytes.toString("base64") };
 };
 
+// src/core/atlas.ts
+import { writeFileSync as writeFileSync3 } from "node:fs";
+var ATLAS_API_BASE = "https://api.atlascloud.ai";
+var ATLAS_TEXT_MODEL = "google/nano-banana-2-lite/text-to-image-developer";
+var ATLAS_EDIT_MODEL = "google/nano-banana-2-lite/edit-developer";
+var ATLAS_IMAGE_SIZES = ["1K"];
+var ATLAS_TIMEOUT_MS = 18e4;
+var sleep2 = async (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+var responseError = (body) => body.message ?? body.error ?? "Atlas Cloud request failed";
+var fetchJson = async (url, init) => {
+  const response = await fetch(url, init);
+  const text = await response.text();
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new Error(`Atlas Cloud returned invalid JSON (HTTP ${response.status})`);
+  }
+  if (!response.ok || body.code !== void 0 && body.code !== 0 && body.code !== 200)
+    throw new Error(`${responseError(body)} (HTTP ${response.status})`);
+  return body;
+};
+var predictionFrom = (body) => {
+  const data = body.data;
+  if (data !== void 0 && "status" in data)
+    return data;
+  return body;
+};
+var uploadImage = async (apiKey, image, index) => {
+  const form = new FormData();
+  const bytes = Buffer.from(image.data, "base64");
+  const extension2 = image.mimeType === "image/jpeg" ? "jpg" : image.mimeType.split("/")[1] ?? "png";
+  form.append("file", new Blob([bytes], { type: image.mimeType }), `input-${index}.${extension2}`);
+  const body = await fetchJson(`${ATLAS_API_BASE}/api/v1/model/uploadMedia`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+    signal: AbortSignal.timeout(12e4)
+  });
+  const data = body.data;
+  const url = data !== void 0 && "download_url" in data ? data.download_url : body.download_url;
+  if (url === void 0 || url === "")
+    throw new Error("Atlas Cloud upload returned no download URL");
+  return url;
+};
+var pollPrediction = async (apiKey, initial) => {
+  if (initial.id === void 0 || initial.id === "")
+    throw new Error("Atlas Cloud generation returned no prediction id");
+  const pollUrl = initial.urls?.get ?? `${ATLAS_API_BASE}/api/v1/model/prediction/${initial.id}`;
+  const deadline = Date.now() + ATLAS_TIMEOUT_MS;
+  let delay = 1e3;
+  let last = initial;
+  while (Date.now() < deadline) {
+    const status = last.status?.toLowerCase();
+    if (status === "completed" || status === "succeeded")
+      return last;
+    if (status === "failed" || status === "cancelled" || status === "timeout")
+      throw new Error(last.error !== void 0 && last.error !== "" ? `Atlas Cloud generation ${status}: ${last.error}` : `Atlas Cloud generation ${status}`);
+    await sleep2(delay);
+    delay = Math.min(Math.ceil(delay * 1.6), 1e4);
+    try {
+      const body = await fetchJson(pollUrl, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(3e4)
+      });
+      last = predictionFrom(body);
+    } catch (error) {
+      if (Date.now() >= deadline)
+        throw error;
+    }
+  }
+  throw new Error(`Atlas Cloud generation timed out after ${ATLAS_TIMEOUT_MS / 1e3}s`);
+};
+var atlasModelFor = (hasInputImages) => hasInputImages ? ATLAS_EDIT_MODEL : ATLAS_TEXT_MODEL;
+var generateAtlasImage = async (input) => {
+  const images = input.inputImages ?? [];
+  const imageUrls = [];
+  for (const [index, image] of images.entries())
+    imageUrls.push(await uploadImage(input.apiKey, image, index + 1));
+  const payload = {
+    model: input.model,
+    prompt: input.prompt,
+    aspect_ratio: input.aspectRatio,
+    resolution: (input.imageSize ?? "1K").toLowerCase()
+  };
+  if (imageUrls.length > 0)
+    payload.images = imageUrls;
+  const submitted = await fetchJson(`${ATLAS_API_BASE}/api/v1/model/generateImage`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(12e4)
+  });
+  const prediction = await pollPrediction(input.apiKey, predictionFrom(submitted));
+  const outputUrl = prediction.outputs?.[0];
+  if (outputUrl === void 0 || outputUrl === "")
+    throw new Error("Atlas Cloud generation completed without an output URL");
+  const output = await fetch(outputUrl, { signal: AbortSignal.timeout(12e4) });
+  if (!output.ok)
+    throw new Error(`Atlas Cloud output download failed (HTTP ${output.status})`);
+  const bytes = Buffer.from(await output.arrayBuffer());
+  writeFileSync3(input.outputPath, toPng(bytes, output.headers.get("content-type") ?? void 0));
+  return { file: input.outputPath, aspectRatio: input.aspectRatio, model: input.model };
+};
+
 // src/cli/main.ts
 var listModels = () => {
   console.log("Image models (Nano Banana tiers):");
@@ -44944,16 +45056,24 @@ var listModels = () => {
     console.log(`  ratios (${m2.aspectRatios.length}): ${m2.aspectRatios.join(", ")}`);
     console.log(`  durations (s): ${m2.durations.join(", ")}`);
   }
+  console.log("");
+  console.log("Atlas Cloud image models (use --provider atlas):");
+  console.log(`  ${ATLAS_TEXT_MODEL}  (text-to-image, default without --input)`);
+  console.log(`  ${ATLAS_EDIT_MODEL}  (image editing, default with --input)`);
+  console.log("  resolutions: 1K");
+  console.log("  ratios (14): all standard and ultra-wide/tall image ratios");
 };
-var HELP = `nano-banana ${VERSION} -- image/video generation via Google Nano Banana + Veo (Gemini)
+var HELP = `nano-banana ${VERSION} -- image generation via Gemini or Atlas Cloud; video via Google Veo
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
+  nano-banana --provider atlas --prompt "..." --output image.png
   nano-banana --prompt "edit: ..." --input ref.png --output out.png
   nano-banana --video --prompt "..." --output clip.mp4 [--resolution 1080p]
   nano-banana --list-models
 
 Options:
+  --provider <id>        image API provider: gemini or atlas       (default gemini)
   --prompt <text>         generation prompt (English recommended)         [required]
   --output <path>         output path: PNG (image) or MP4 (--video)       [required]
   --input <path>          reference image; repeatable (1-${MAX_INPUT_IMAGES}) for image-to-image,
@@ -44969,15 +45089,16 @@ Options:
   --duration <s>          video clip duration in seconds; model-dependent (--video
                           only; Veo 3.0: 8; Veo 3.1: 4/6/8) (default: model's own)
   --negative-prompt <t>   what the video must NOT contain (--video only)
-  --model <id>            Gemini model id (default: image ${DEFAULT_MODEL},
-                          video ${DEFAULT_VIDEO_MODEL})
+  --model <id>            provider model id (default: provider/mode-specific)
   --key-file <path>       read API key from a file (override; default: environment)
   --list-models           list models with supported ratios/resolution and exit
   --version               print version and exit
   --help                  print this help and exit
 
 API key:
-  Read from GEMINI_API_KEY or GOOGLE_API_KEY. Never stored in the project.
+  Gemini: GEMINI_API_KEY or GOOGLE_API_KEY.
+  Atlas Cloud: ATLASCLOUD_API_KEY or ATLAS_CLOUD_API_KEY.
+  Keys are never stored in the project.
   --key-file overrides with a file outside the repo (CI secrets).
 
 Image models (see --list-models):
@@ -45031,8 +45152,17 @@ var main = async () => {
   const output = values["output"];
   if (prompt === void 0 || output === void 0)
     return fail("--prompt and --output are required (unless --list-models)", 2);
+  const providerRaw = values["provider"] ?? "gemini";
+  if (providerRaw !== "gemini" && providerRaw !== "atlas")
+    return fail(`unknown --provider "${providerRaw}" (allowed: gemini, atlas)`, 2);
+  const provider = providerRaw;
   const video = values["video"] === true;
-  const model = values["model"] ?? (video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL);
+  if (video && provider === "atlas")
+    return fail("--provider atlas currently supports images only; omit --provider for Veo video", 2);
+  const hasInputImages = (values["input"]?.length ?? 0) > 0;
+  const model = values["model"] ?? (provider === "atlas" ? atlasModelFor(hasInputImages) : video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL);
+  if (provider === "atlas" && model !== atlasModelFor(hasInputImages))
+    return fail(`--model "${model}" does not match Atlas ${hasInputImages ? "edit" : "text-to-image"} mode`, 2);
   if (!video) {
     for (const flag of ["resolution", "duration", "negative-prompt"])
       if (values[flag] !== void 0)
@@ -45042,12 +45172,12 @@ var main = async () => {
   const aspectRatio = resolveAspectRatio(
     values,
     model,
-    video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model)
+    provider === "atlas" ? aspectRatiosForModel("gemini-3.1-flash-image") : video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model)
   );
   let imageSize;
   const sizeRaw = values["image-size"];
   if (sizeRaw !== void 0) {
-    const allowed = imageSizesForModel(model);
+    const allowed = provider === "atlas" ? ATLAS_IMAGE_SIZES : imageSizesForModel(model);
     if (!isImageSize(sizeRaw) || !allowed.includes(sizeRaw))
       return fail(`--image-size "${sizeRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
     imageSize = sizeRaw;
@@ -45081,7 +45211,7 @@ var main = async () => {
       return fail(err instanceof Error ? err.message : String(err), 2);
     }
   }
-  const apiKey = resolveApiKey(values["key-file"]);
+  const apiKey = resolveApiKey(values["key-file"], provider);
   trustSystemCAs();
   if (video) {
     const input2 = { apiKey, prompt, outputPath: output, model, aspectRatio };
@@ -45099,7 +45229,8 @@ var main = async () => {
       status: "ok",
       file: result2.file,
       aspect_ratio: result2.aspectRatio,
-      model: result2.model
+      model: result2.model,
+      provider
     };
     if (resolution !== void 0)
       envelope2.resolution = resolution;
@@ -45113,12 +45244,13 @@ var main = async () => {
     input.imageSize = imageSize;
   if (inputImages !== void 0)
     input.inputImages = inputImages;
-  const result = await generateImage(input);
+  const result = provider === "atlas" ? await generateAtlasImage(input) : await generateImage(input);
   const envelope = {
     status: "ok",
     file: result.file,
     aspect_ratio: result.aspectRatio,
-    model: result.model
+    model: result.model,
+    provider
   };
   if (imageSize !== void 0)
     envelope.image_size = imageSize;

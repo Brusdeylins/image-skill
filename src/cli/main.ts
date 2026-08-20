@@ -11,7 +11,7 @@
 */
 
 import { parseCli, type CliValues } from "../infra/args.js"
-import { resolveApiKey } from "../infra/apikey.js"
+import { resolveApiKey, type ApiProvider } from "../infra/apikey.js"
 import { trustSystemCAs } from "../infra/tls.js"
 import { emitOk, fail, type OkEnvelope } from "../infra/envelope.js"
 import { VERSION, PACKAGE } from "../infra/version.js"
@@ -26,6 +26,9 @@ import {
 } from "../core/video.js"
 import { isAspectRatio, type AspectRatio } from "../core/aspect.js"
 import { readInputImage, MAX_INPUT_IMAGES, type InputImage } from "../infra/imagefile.js"
+import {
+    ATLAS_EDIT_MODEL, ATLAS_IMAGE_SIZES, ATLAS_TEXT_MODEL, atlasModelFor, generateAtlasImage
+} from "../core/atlas.js"
 
 /**  print each model with its supported resolutions and aspect ratios  */
 const listModels = (): void => {
@@ -48,18 +51,26 @@ const listModels = (): void => {
         console.log(`  ratios (${m.aspectRatios.length}): ${m.aspectRatios.join(", ")}`)
         console.log(`  durations (s): ${m.durations.join(", ")}`)
     }
+    console.log("")
+    console.log("Atlas Cloud image models (use --provider atlas):")
+    console.log(`  ${ATLAS_TEXT_MODEL}  (text-to-image, default without --input)`)
+    console.log(`  ${ATLAS_EDIT_MODEL}  (image editing, default with --input)`)
+    console.log("  resolutions: 1K")
+    console.log("  ratios (14): all standard and ultra-wide/tall image ratios")
 }
 
 /**  the help text  */
-const HELP = `nano-banana ${VERSION} -- image/video generation via Google Nano Banana + Veo (Gemini)
+const HELP = `nano-banana ${VERSION} -- image generation via Gemini or Atlas Cloud; video via Google Veo
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
+  nano-banana --provider atlas --prompt "..." --output image.png
   nano-banana --prompt "edit: ..." --input ref.png --output out.png
   nano-banana --video --prompt "..." --output clip.mp4 [--resolution 1080p]
   nano-banana --list-models
 
 Options:
+  --provider <id>        image API provider: gemini or atlas       (default gemini)
   --prompt <text>         generation prompt (English recommended)         [required]
   --output <path>         output path: PNG (image) or MP4 (--video)       [required]
   --input <path>          reference image; repeatable (1-${MAX_INPUT_IMAGES}) for image-to-image,
@@ -75,15 +86,16 @@ Options:
   --duration <s>          video clip duration in seconds; model-dependent (--video
                           only; Veo 3.0: 8; Veo 3.1: 4/6/8) (default: model's own)
   --negative-prompt <t>   what the video must NOT contain (--video only)
-  --model <id>            Gemini model id (default: image ${DEFAULT_MODEL},
-                          video ${DEFAULT_VIDEO_MODEL})
+  --model <id>            provider model id (default: provider/mode-specific)
   --key-file <path>       read API key from a file (override; default: environment)
   --list-models           list models with supported ratios/resolution and exit
   --version               print version and exit
   --help                  print this help and exit
 
 API key:
-  Read from GEMINI_API_KEY or GOOGLE_API_KEY. Never stored in the project.
+  Gemini: GEMINI_API_KEY or GOOGLE_API_KEY.
+  Atlas Cloud: ATLASCLOUD_API_KEY or ATLAS_CLOUD_API_KEY.
+  Keys are never stored in the project.
   --key-file overrides with a file outside the repo (CI secrets).
 
 Image models (see --list-models):
@@ -152,8 +164,21 @@ const main = async (): Promise<void> => {
     if (prompt === undefined || output === undefined)
         return fail("--prompt and --output are required (unless --list-models)", 2)
 
+    const providerRaw = values["provider"] ?? "gemini"
+    if (providerRaw !== "gemini" && providerRaw !== "atlas")
+        return fail(`unknown --provider "${providerRaw}" (allowed: gemini, atlas)`, 2)
+    const provider: ApiProvider = providerRaw
+
     const video = values["video"] === true
-    const model = values["model"] ?? (video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL)
+    if (video && provider === "atlas")
+        return fail("--provider atlas currently supports images only; omit --provider for Veo video", 2)
+
+    const hasInputImages = (values["input"]?.length ?? 0) > 0
+    const model = values["model"] ?? (provider === "atlas"
+        ? atlasModelFor(hasInputImages)
+        : (video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL))
+    if (provider === "atlas" && model !== atlasModelFor(hasInputImages))
+        return fail(`--model "${model}" does not match Atlas ${hasInputImages ? "edit" : "text-to-image"} mode`, 2)
 
     /*  the video-only options are usage errors in image mode, and vice versa  */
     if (!video) {
@@ -165,12 +190,13 @@ const main = async (): Promise<void> => {
         return fail("--image-size is an image option; use --resolution with --video", 2)
 
     const aspectRatio = resolveAspectRatio(values, model,
-        video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model))
+        provider === "atlas" ? aspectRatiosForModel("gemini-3.1-flash-image")
+            : (video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model)))
 
     let imageSize: ImageSize | undefined
     const sizeRaw = values["image-size"]
     if (sizeRaw !== undefined) {
-        const allowed = imageSizesForModel(model)
+        const allowed = provider === "atlas" ? ATLAS_IMAGE_SIZES : imageSizesForModel(model)
         if (!isImageSize(sizeRaw) || !allowed.includes(sizeRaw))
             return fail(`--image-size "${sizeRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2)
         imageSize = sizeRaw
@@ -209,7 +235,7 @@ const main = async (): Promise<void> => {
         }
     }
 
-    const apiKey = resolveApiKey(values["key-file"])
+    const apiKey = resolveApiKey(values["key-file"], provider)
 
     /*  trust a corporate Zscaler root from the OS store before the HTTPS call  */
     trustSystemCAs()
@@ -231,7 +257,8 @@ const main = async (): Promise<void> => {
             status:       "ok",
             file:         result.file,
             aspect_ratio: result.aspectRatio,
-            model:        result.model
+            model:        result.model,
+            provider
         }
         if (resolution !== undefined)
             envelope.resolution = resolution
@@ -247,12 +274,13 @@ const main = async (): Promise<void> => {
     if (inputImages !== undefined)
         input.inputImages = inputImages
 
-    const result = await generateImage(input)
+    const result = provider === "atlas" ? await generateAtlasImage(input) : await generateImage(input)
     const envelope: OkEnvelope = {
         status:       "ok",
         file:         result.file,
         aspect_ratio: result.aspectRatio,
-        model:        result.model
+        model:        result.model,
+        provider
     }
     if (imageSize !== undefined)
         envelope.image_size = imageSize

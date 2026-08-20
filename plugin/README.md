@@ -1,8 +1,9 @@
 # image -- Claude Code plugin
 
 Professional image generation for Claude Code, built on the bundled
-[nano-banana](../README.md) CLI and **Google Nano Banana Pro** (Gemini Image
-API). The plugin ships **one skill**:
+[nano-banana](../README.md) CLI. Images use Google Nano Banana through Gemini
+by default, with Atlas Cloud available as an optional provider. The plugin
+ships **one skill**:
 
 - **`image`** -- crafts a prompt and generates a PNG, with template-aware
   aspect ratios for the msg systems Research PowerPoint layouts.
@@ -21,8 +22,9 @@ API). The plugin ships **one skill**:
 ## Requirements
 
 - **Node >= 20** (>= 22 recommended for `--use-system-ca`).
-- **API key** in the environment: `GEMINI_API_KEY` or `GOOGLE_API_KEY`. Never
-  stored in the project.
+- **API key** in the environment: `GEMINI_API_KEY` / `GOOGLE_API_KEY` for
+  Gemini, or `ATLASCLOUD_API_KEY` / `ATLAS_CLOUD_API_KEY` for Atlas Cloud.
+  Never stored in the project.
 
 ## Corporate proxy (Zscaler)
 
