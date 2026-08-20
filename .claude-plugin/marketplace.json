@@ -12,7 +12,7 @@
         {
             "name": "image",
             "source": "./plugin",
-            "description": "Generates and edits images and videos via Google Nano Banana (Gemini Image API) and Veo (Gemini Video API): text-to-image, image-to-image and text/image-to-video, model-aware ratios/resolutions, driven by the bundled nano-banana CLI",
+            "description": "Generates and edits images with Google Nano Banana through Gemini or optional Atlas Cloud, plus Veo video through Gemini",
             "version": "0.10.0",
             "author": {
                 "name": "Matthias Brusdeylins",
@@ -24,6 +24,7 @@
                 "image-editing",
                 "video-generation",
                 "gemini",
+                "atlas-cloud",
                 "nano-banana",
                 "veo"
             ],

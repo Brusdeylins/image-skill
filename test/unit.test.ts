@@ -16,7 +16,7 @@ import { tmpdir } from "node:os"
 import jpeg from "jpeg-js"
 import { PNG } from "pngjs"
 import { parseCli } from "../src/infra/args.js"
-import { resolveApiKey, KEY_ENV_VARS } from "../src/infra/apikey.js"
+import { resolveApiKey, ATLAS_KEY_ENV_VARS, KEY_ENV_VARS } from "../src/infra/apikey.js"
 import { isAspectRatio } from "../src/core/aspect.js"
 import { aspectRatiosForModel, imageSizesForModel } from "../src/core/models.js"
 import {
@@ -24,6 +24,7 @@ import {
 } from "../src/core/video.js"
 import { readInputImage } from "../src/infra/imagefile.js"
 import { toPng } from "../src/core/png.js"
+import { ATLAS_EDIT_MODEL, ATLAS_TEXT_MODEL, atlasModelFor } from "../src/core/atlas.js"
 
 /**  absolute path to the built CLI bundle (cwd-independent)  */
 const CLI_BUNDLE = fileURLToPath(new URL("../dst/nano-banana.mjs", import.meta.url))
@@ -37,6 +38,11 @@ describe("parseCli", () => {
         expect(values["prompt"]).toBe("a cat")
         expect(values["output"]).toBe("c.png")
         expect(values["list-models"]).toBe(true)
+    })
+
+    it("parses an Atlas provider selection", () => {
+        const values = parseCli(["--provider", "atlas", "--prompt", "a cat", "--output", "c.png"])
+        expect(values["provider"]).toBe("atlas")
     })
 
     it("keeps a `--`-prefixed value via the `=` form (P6)", () => {
@@ -152,6 +158,34 @@ describe("cli envelope", () => {
         expect(env.status).toBe("error")
         expect(env.message).toContain("too many --input images: 2 (max 1 with --video)")
         expect(code).not.toBe(0)
+    })
+
+    it("rejects Atlas Cloud for video mode", () => {
+        const { out, code } = runCli([
+            "--provider", "atlas", "--video", "--prompt", "x", "--output", "/tmp/nb-never.mp4"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("supports images only")
+        expect(code).not.toBe(0)
+    })
+
+    it("rejects non-1K resolution for the Atlas Cloud lite model", () => {
+        const { out, code } = runCli([
+            "--provider", "atlas", "--prompt", "x", "--output", "/tmp/nb-never.png",
+            "--image-size", "2K"
+        ])
+        const env = JSON.parse(out.trim()) as { status: string, message: string }
+        expect(env.status).toBe("error")
+        expect(env.message).toContain("not supported by google/nano-banana-2-lite")
+        expect(code).not.toBe(0)
+    })
+})
+
+describe("Atlas Cloud models", () => {
+    it("selects text or edit model from the presence of input images", () => {
+        expect(atlasModelFor(false)).toBe(ATLAS_TEXT_MODEL)
+        expect(atlasModelFor(true)).toBe(ATLAS_EDIT_MODEL)
     })
 })
 
@@ -291,12 +325,26 @@ describe("resolveApiKey", () => {
         }
     })
 
+    it("reads the Atlas Cloud key only for the Atlas provider", () => {
+        const prev = process.env[ATLAS_KEY_ENV_VARS[0]]
+        process.env[ATLAS_KEY_ENV_VARS[0]] = "  atlas-key  "
+        try {
+            expect(resolveApiKey(undefined, "atlas")).toBe("atlas-key")
+        }
+        finally {
+            if (prev === undefined)
+                Reflect.deleteProperty(process.env, ATLAS_KEY_ENV_VARS[0])
+            else
+                process.env[ATLAS_KEY_ENV_VARS[0]] = prev
+        }
+    })
+
     it("throws an actionable error when no key is present", () => {
         const saved = KEY_ENV_VARS.map((name) => process.env[name])
         for (const name of KEY_ENV_VARS)
             Reflect.deleteProperty(process.env, name)
         try {
-            expect(() => resolveApiKey()).toThrow(/No API key found/)
+            expect(() => resolveApiKey()).toThrow(/No Gemini API key found/)
         }
         finally {
             KEY_ENV_VARS.forEach((name, i) => {

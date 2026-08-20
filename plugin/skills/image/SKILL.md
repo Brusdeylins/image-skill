@@ -1,8 +1,9 @@
 ---
 name: image
 description: >
-  Generate professional images using Google Nano Banana Pro (Gemini Image API)
-  and videos using Google Veo (Gemini Video API). Trigger this skill when the
+  Generate professional images using Google Nano Banana through Gemini or the
+  optional Atlas Cloud provider, and videos using Google Veo through Gemini.
+  Trigger this skill when the
   user wants to generate, create, or produce images, photos, illustrations,
   visuals, videos, clips, or animations, or when another skill needs an image
   or video for a given aspect ratio.
@@ -19,6 +20,8 @@ and in cinematic video generation.
 ## Capabilities
 
 - **Text-to-image**: generate an image from a prompt (`--prompt` + `--output`).
+- **Provider choice**: Gemini is the default; `--provider atlas` uses Atlas
+  Cloud for text-to-image or image editing.
 - **Image-to-image / editing**: pass one or more reference images with `--input`
   (repeatable, 1-14) to edit, restyle, or compose. The model keeps subjects
   consistent across edits. Examples: recolor/retouch, background replacement,
@@ -55,8 +58,9 @@ envelope on stdout.
 
 ## API Key (environment only)
 
-The API key is **never stored in this project**. It is read from the
-environment at call time, from `GEMINI_API_KEY` (or `GOOGLE_API_KEY`).
+The API key is **never stored in this project**. Gemini reads
+`GEMINI_API_KEY` (or `GOOGLE_API_KEY`); Atlas Cloud reads
+`ATLASCLOUD_API_KEY` (or `ATLAS_CLOUD_API_KEY`).
 `--key-file <path>` exists only as an override for a secret mounted OUTSIDE the
 project tree (CI).
 
@@ -97,6 +101,10 @@ not in the user's OS trust store; tell the user to import it there (or set
 # Basic image generation
 node <skill-dir/>/scripts/nano-banana.mjs \
   --prompt "..." --output image.png
+
+# Optional Atlas Cloud image provider
+node <skill-dir/>/scripts/nano-banana.mjs \
+  --provider atlas --prompt "..." --output image.png
 
 # With explicit aspect ratio
 node <skill-dir/>/scripts/nano-banana.mjs \
@@ -142,6 +150,7 @@ node <skill-dir/>/scripts/nano-banana.mjs --list-models
 
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `--provider` | no | gemini | Image API provider: `gemini` or `atlas` |
 | `--prompt` | yes | -- | Generation/edit prompt (English recommended) |
 | `--output` | yes | -- | Output file path: PNG (image) or MP4 (`--video`) |
 | `--input` | no | -- | Reference image; **repeatable** (1-14) for image-to-image, exactly **1** for image-to-video (PNG/JPEG/WEBP, <=7 MB each) |
@@ -151,7 +160,7 @@ node <skill-dir/>/scripts/nano-banana.mjs --list-models
 | `--resolution` | no | model default (720p) | Video resolution (`720p`/`1080p`); `--video` only |
 | `--duration` | no | model default | Video clip duration in seconds; **model-dependent** (`--video` only) |
 | `--negative-prompt` | no | -- | What the video must NOT contain; `--video` only |
-| `--model` | no | gemini-3-pro-image / veo-3.0-generate-001 | Gemini model ID (see Models) |
+| `--model` | no | provider/mode-specific | Provider model ID (see Models) |
 | `--key-file` | no | environment | Path to API key file (override; default reads env) |
 | `--list-models` | -- | -- | List models with supported ratios/resolutions and exit |
 
@@ -183,6 +192,11 @@ aliases are deprecated; prefer the stable ids.
 All Veo 3 tiers generate native audio. Pick a Veo 3.1 preview tier when the
 user needs portrait `9:16` or a 4/6 s clip; otherwise stay on the GA default.
 
+With `--provider atlas`, text-to-image uses
+`google/nano-banana-2-lite/text-to-image-developer`; providing `--input`
+selects `google/nano-banana-2-lite/edit-developer`. Both support the 14 image
+ratios above at `1K`. Atlas Cloud does not support `--video` in this CLI.
+
 `--aspect-ratio`, `--image-size`, `--resolution` and `--duration` are each
 validated against the chosen model's set; an unsupported value (e.g. `1:4` or
 `512` on Pro, `2K` on Nano Banana 1, `9:16` on Veo 3.0) is a usage error
@@ -192,7 +206,7 @@ for the full per-model lists.
 ### Output and exit codes
 
 Every run prints exactly one JSON envelope on stdout (notes go to stderr):
-`{"status":"ok","file":...,"aspect_ratio":...,"model":...}` or
+`{"status":"ok","file":...,"aspect_ratio":...,"model":...,"provider":...}` or
 `{"status":"error","message":...}`. Exit codes: `0` ok, `2` usage error
 (missing/invalid args), `1` runtime error (API/network/no image or video).
 

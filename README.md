@@ -1,10 +1,10 @@
 # nano-banana
 
-Deterministic image- and video-generation CLI for LLM agents, built on
-**Google Nano Banana Pro** (Gemini Image API) and **Google Veo** (Gemini Video
-API). It produces professional PNG images and MP4 videos at a chosen,
-model-validated aspect ratio, and ships as a Claude Code plugin (`image`
-skill).
+Deterministic image- and video-generation CLI for LLM agents. Images can use
+**Google Nano Banana Pro** directly through Gemini or the optional **Atlas
+Cloud** provider; videos use **Google Veo** through Gemini. It produces PNG
+images and MP4 videos at a chosen, model-validated aspect ratio, and ships as a
+Claude Code plugin (`image` skill).
 
 This is the Node.js successor of the former Python `image` skill.
 
@@ -28,14 +28,16 @@ After the install, the `image` skill (text-to-image, image-to-image and
 text/image-to-video) is available in every Claude Code session; update later
 with `/plugin marketplace update nano-banana`.
 
-The only prerequisites are **Node.js >= 20** and an API key in the
-environment (next section).
+The only prerequisites are **Node.js >= 20** and an API key for the selected
+provider in the environment (next section).
 
 ## API key
 
-Read from `GEMINI_API_KEY` or `GOOGLE_API_KEY`. **Never** committed to the
-repository (`*.key` is git-ignored). `--key-file <path>` is an override for a
-secret mounted outside the project (CI).
+Gemini reads `GEMINI_API_KEY` or `GOOGLE_API_KEY`; Atlas Cloud reads
+`ATLASCLOUD_API_KEY` or `ATLAS_CLOUD_API_KEY`. Keys are **never** committed to
+the repository (`*.key` is git-ignored). `--key-file <path>` overrides the
+selected provider's environment variable with a secret mounted outside the
+project (CI).
 
 ### Setting the variable
 
@@ -96,6 +98,7 @@ The same generator is a standalone CLI, e.g. from a repository checkout:
 
 ```bash
 node dst/nano-banana.mjs --prompt "a red sports car at dusk" --output car.png
+node dst/nano-banana.mjs --provider atlas --prompt "a red sports car at dusk" --output atlas-car.png
 node dst/nano-banana.mjs --prompt "..." --output portrait.png --aspect-ratio 2:3
 node dst/nano-banana.mjs --prompt "..." --output hi.png --image-size 4K
 node dst/nano-banana.mjs --prompt "make the car blue" --input car.png --output blue.png
@@ -110,6 +113,7 @@ Run `nano-banana --help` for the same reference at the terminal.
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
+| `--provider <id>` | no | `gemini` | image API provider: `gemini` or `atlas` |
 | `--prompt <text>` | yes | — | generation/edit prompt (English recommended) |
 | `--output <path>` | yes | — | output path: PNG (image) or MP4 (`--video`) |
 | `--input <path>` | no | — | reference image; **repeatable** (1–14) for image-to-image, exactly **1** for image-to-video (PNG/JPEG/WEBP, ≤7 MB each) |
@@ -119,7 +123,7 @@ Run `nano-banana --help` for the same reference at the terminal.
 | `--resolution <r>` | no | model default (`720p`) | video resolution (`720p`/`1080p`); `--video` only |
 | `--duration <s>` | no | model default | video clip duration in seconds; **model-dependent** (`--video` only) |
 | `--negative-prompt <t>` | no | — | what the video must NOT contain; `--video` only |
-| `--model <id>` | no | `gemini-3-pro-image` / `veo-3.0-generate-001` | Gemini model id (see Models) |
+| `--model <id>` | no | provider/mode-specific | provider model id (see Models) |
 | `--key-file <path>` | no | environment | read the API key from a file (CI override; default reads the env) |
 | `--list-models` | — | — | print the model → ratios/resolution table and exit |
 | `--version` | — | — | print version and exit |
@@ -155,6 +159,17 @@ rejected.
 The Veo 3.0 tiers are GA (stable); the Veo 3.1 tiers are previews adding
 portrait `9:16` and the shorter durations. All Veo 3 tiers generate **native
 audio** with the video.
+
+**Atlas Cloud image models (`--provider atlas`)**
+
+| Mode | API id | Aspect ratios | Resolution |
+|------|--------|---------------|------------|
+| text-to-image | `google/nano-banana-2-lite/text-to-image-developer` | 14 | `1K` |
+| image editing | `google/nano-banana-2-lite/edit-developer` | 14 | `1K` |
+
+The CLI selects the edit model when `--input` is present and uploads local
+references before the generation request. Atlas generation is image-only: it
+submits one generation POST and uses bounded GET polling for the prediction.
 
 `--aspect-ratio`, `--image-size`, `--resolution` and `--duration` are each
 validated against the chosen model's set: passing an unsupported value (e.g.
@@ -213,8 +228,8 @@ Every run prints **exactly one JSON envelope on stdout**; diagnostic notes go to
 stderr.
 
 ```json
-{ "status": "ok", "file": "car.png", "aspect_ratio": "16:9", "model": "gemini-3-pro-image" }
-{ "status": "ok", "file": "clip.mp4", "aspect_ratio": "16:9", "model": "veo-3.0-generate-001", "resolution": "1080p" }
+{ "status": "ok", "file": "car.png", "aspect_ratio": "16:9", "model": "gemini-3-pro-image", "provider": "gemini" }
+{ "status": "ok", "file": "clip.mp4", "aspect_ratio": "16:9", "model": "veo-3.0-generate-001", "provider": "gemini", "resolution": "1080p" }
 { "status": "error", "message": "--prompt and --output are required (unless --list-models)" }
 ```
 
@@ -272,6 +287,7 @@ nano-banana-project/
   src/                         TypeScript source
     cli/main.ts                CLI entry point (arg parsing, JSON envelope)
     core/generate.ts           Gemini Image API call (@google/genai)
+    core/atlas.ts              Atlas Cloud image upload/generation/polling
     core/video.ts              Veo video tiers + Gemini Video API call
     core/aspect.ts             accepted aspect ratios + guard
     core/models.ts             model tiers + per-model ratio/resolution support

@@ -13,6 +13,8 @@ import { parseArgs as nodeParseArgs } from "node:util"
 
 /**  the parsed option values, keyed by flag name without the dashes  */
 export interface CliValues {
+    /**  image API provider  */
+    "provider": string | undefined
     /**  image generation prompt  */
     "prompt": string | undefined
     /**  output PNG path  */
@@ -31,7 +33,7 @@ export interface CliValues {
     "duration": string | undefined
     /**  what the video must NOT contain  */
     "negative-prompt": string | undefined
-    /**  Gemini model id  */
+    /**  provider model id  */
     "model": string | undefined
     /**  path to an API key file (override)  */
     "key-file": string | undefined
@@ -58,6 +60,7 @@ export const parseCli = (argv: readonly string[]): CliValues =>
         strict: true,
         allowPositionals: false,
         options: {
+            "provider":      { type: "string" },
             "prompt":        { type: "string" },
             "output":        { type: "string" },
             "input":         { type: "string", multiple: true },

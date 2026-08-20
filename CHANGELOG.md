@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add optional `--provider atlas` image generation and editing with live model
+  selection, media upload for local references, a single generation POST, and
+  bounded prediction polling. Gemini remains the default and video continues
+  to use Veo through Gemini.
+- Add provider-aware API key discovery and include the selected provider in
+  successful JSON envelopes.
+
 ## 0.10.0
 
 - Video generation via Google Veo (Gemini Video API): new `--video` switch
