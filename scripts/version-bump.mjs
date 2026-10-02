@@ -30,6 +30,8 @@ writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
 
 const clPath = new URL("../CHANGELOG.md", import.meta.url)
 const changelog = readFileSync(clPath, "utf8")
+if (!changelog.includes("# Changelog\n"))
+    throw new Error("CHANGELOG.md: missing \"# Changelog\" heading")
 writeFileSync(clPath, changelog.replace("# Changelog\n",
     `# Changelog\n\n## ${next}\n\n- (describe the changes)\n`))
 

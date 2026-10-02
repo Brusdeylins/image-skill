@@ -14,25 +14,43 @@ import { readFileSync } from "node:fs"
 /**  the environment variables consulted, in order of precedence  */
 export const KEY_ENV_VARS = ["GEMINI_API_KEY", "GOOGLE_API_KEY"] as const
 
+/**  visible ASCII only: anything else is invalid as an HTTP header value  */
+const HEADER_SAFE_KEY = /^[\x21-\x7e]+$/
+
+/**  reject a key undici would refuse as a header value; its error text echoes the value, so check first  */
+const assertHeaderSafe = (key: string): string => {
+    if (!HEADER_SAFE_KEY.test(key))
+        throw new Error("API key contains characters that are not valid in an HTTP header (stray whitespace or line break?)")
+    return key
+}
+
 /**
  *  Resolve the API key. With `keyFile` given, read it; otherwise consult the
- *  environment. Throws with an actionable message when nothing is found, so the
- *  key is never silently empty.
+ *  environment. The key value is never echoed in an error message.
  *
  *  @param keyFile - optional path to a file holding the raw key (override)
  *  @returns the trimmed API key
+ *  @throws when no key is found, the key file is unreadable or empty, or the
+ *          key is not visible ASCII
  */
 export const resolveApiKey = (keyFile?: string): string => {
     if (keyFile !== undefined) {
-        const key = readFileSync(keyFile, "utf8").trim()
+        let raw: string
+        try {
+            raw = readFileSync(keyFile, "utf8")
+        }
+        catch (err) {
+            throw new Error(`cannot read API key file: ${keyFile}`, { cause: err })
+        }
+        const key = raw.trim()
         if (key === "")
             throw new Error(`API key file is empty: ${keyFile}`)
-        return key
+        return assertHeaderSafe(key)
     }
     for (const name of KEY_ENV_VARS) {
         const value = process.env[name]?.trim()
         if (value !== undefined && value !== "")
-            return value
+            return assertHeaderSafe(value)
     }
     throw new Error(
         `No API key found. Set ${KEY_ENV_VARS.join(" or ")} in the environment, `

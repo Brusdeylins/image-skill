@@ -1,32 +1,32 @@
 # image -- Claude Code plugin
 
-Professional image generation for Claude Code, built on the bundled
-[nano-banana](../README.md) CLI and **Google Nano Banana Pro** (Gemini Image
-API). The plugin ships **one skill**:
+Professional image and video generation for Claude Code, built on the bundled
+[nano-banana](../README.md) CLI, **Google Nano Banana** (Gemini Image API) and
+**Gemini Omni** (Gemini video). The plugin ships **one skill**:
 
-- **`image`** -- crafts a prompt and generates a PNG, with template-aware
-  aspect ratios for the msg systems Research PowerPoint layouts.
+- **`image`** -- crafts a prompt and generates a PNG image or an MP4 clip.
 
 ## What the skill does
 
-- **Corporate-style prompts**: a fixed formula (CI accent #A01441, camera,
-  lighting, quality) yields on-brand, editorial-quality images.
-- **Template-aware aspect ratios**: `--layout` / `--placeholder` resolve the
-  real placeholder ratios of the PowerPoint template, so a slide image fills
-  its frame without distortion.
+- **Text-to-image and image-to-image**: generate from a prompt, or edit,
+  restyle and compose with one or more reference images (`--input`).
+- **Text-to-video and image-to-video**: `--video` writes an MP4 clip with
+  native audio via Gemini Omni; one optional `--input` image animates a
+  still.
+- **Model-aware options**: `--aspect-ratio`, `--image-size` and `--resolution`
+  are validated against the chosen model (`--list-models`).
 - **Deterministic output**: every run emits one JSON envelope on stdout.
-- **PowerPoint integration**: triggered by the `ppt` skill to fill picture
-  placeholders.
 
 ## Requirements
 
-- **Node >= 20** (>= 22 recommended for `--use-system-ca`).
+- **Node >= 20**.
 - **API key** in the environment: `GEMINI_API_KEY` or `GOOGLE_API_KEY`. Never
-  stored in the project.
+  stored in the project. It must be visible ASCII (no whitespace or line
+  break); otherwise the run exits 2.
 
 ## Corporate proxy (Zscaler)
 
-The skill calls the Gemini API over HTTPS. Behind a Zscaler proxy, run with
-`NODE_OPTIONS=--use-system-ca` (trusts the macOS keychain) or
-`NODE_EXTRA_CA_CERTS=/path/to/zscaler-root.crt`. No certificate is bundled with
-the plugin.
+TLS trust is automatic: on startup the CLI merges the OS trust store (macOS
+keychain / Windows certificate store) into Node's default CA set, so no env
+var and no bundled certificate are needed. See the [README](../README.md) for
+the manual overrides.

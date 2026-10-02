@@ -4,32 +4,39 @@
 **  Licensed under MIT license <https://spdx.org/licenses/MIT>
 **
 **  infra/imagefile: read a reference/input image from disk for image-to-image
-**  generation. The Gemini image models accept up to 14 input images, at most
-**  7 MB each, as PNG/JPEG/WEBP. The mime type is detected from the file's magic
-**  bytes (not its extension), so a mislabeled file is still typed correctly.
+**  generation. The caps here (14 images, 7 MB each) are CLI limits; Gemini's
+**  documented limit is 20 MB of inline data per request and the image count
+**  differs per model. Accepts PNG/JPEG/WEBP; the mime type is detected from
+**  the magic bytes (not the extension), so a mislabeled file is typed correctly.
 */
 
-import { readFileSync } from "node:fs"
-
-/**  one decoded input image, ready as an inline data part  */
-export interface InputImage {
-    /**  the detected mime type  */
-    mimeType: string
-    /**  the image bytes, base64-encoded  */
-    data: string
-}
+import { readFileSync, statSync } from "node:fs"
+import { isJpeg, isPng } from "../core/png.js"
+import type { InputImage } from "../core/types.js"
 
 /**  max number of input images per request  */
 export const MAX_INPUT_IMAGES = 14
 
-/**  max size of a single input image in bytes  */
+/**  max number of input images for video generation (first-frame image)  */
+export const MAX_VIDEO_INPUT_IMAGES = 1
+
+/**  max size of a single input image in bytes (a CLI cap, not a documented API limit)  */
 export const MAX_INPUT_BYTES = 7 * 1024 * 1024
+
+/**  documented total inline request limit (prompt, system text and inline bytes); counted conservatively in decimal MB  */
+export const MAX_INLINE_REQUEST_BYTES = 20_000_000
+
+/**  the ASCII tag opening a RIFF container  */
+const RIFF_TAG = "RIFF"
+
+/**  the ASCII form type of a WEBP container  */
+const WEBP_TAG = "WEBP"
 
 /**  magic-byte detectors for the accepted input formats  */
 const SIGNATURES: ReadonlyArray<{ mime: string, test: (bytes: Buffer) => boolean }> = [
-    { mime: "image/png",  test: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
-    { mime: "image/jpeg", test: (b) => b.subarray(0, 2).equals(Buffer.from([0xff, 0xd8])) },
-    { mime: "image/webp", test: (b) => b.subarray(0, 4).toString("ascii") === "RIFF" && b.subarray(8, 12).toString("ascii") === "WEBP" }
+    { mime: "image/png",  test: isPng },
+    { mime: "image/jpeg", test: isJpeg },
+    { mime: "image/webp", test: (b) => b.subarray(0, 4).toString("ascii") === RIFF_TAG && b.subarray(8, 12).toString("ascii") === WEBP_TAG }
 ]
 
 /**
@@ -41,7 +48,26 @@ const SIGNATURES: ReadonlyArray<{ mime: string, test: (bytes: Buffer) => boolean
  *  @returns the decoded input image
  */
 export const readInputImage = (path: string): InputImage => {
-    const bytes = readFileSync(path)
+    /*  check type and size before reading the file into memory  */
+    let stat
+    try {
+        stat = statSync(path)
+    }
+    catch (err) {
+        throw new Error(`cannot read input image: ${path}`, { cause: err })
+    }
+    if (!stat.isFile())
+        throw new Error(`input image is not a regular file: ${path}`)
+    if (stat.size > MAX_INPUT_BYTES)
+        throw new Error(`input image too large: ${path} (${stat.size} bytes, max ${MAX_INPUT_BYTES})`)
+    let bytes
+    try {
+        bytes = readFileSync(path)
+    }
+    catch (err) {
+        throw new Error(`cannot read input image: ${path}`, { cause: err })
+    }
+    /*  re-check the bytes actually read: the file may have grown after statSync (TOCTOU)  */
     if (bytes.length > MAX_INPUT_BYTES)
         throw new Error(`input image too large: ${path} (${bytes.length} bytes, max ${MAX_INPUT_BYTES})`)
     const sig = SIGNATURES.find((s) => s.test(bytes))

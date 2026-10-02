@@ -3,76 +3,76 @@
 **  Copyright (c) 2026 Matthias Brusdeylins
 **  Licensed under MIT license <https://spdx.org/licenses/MIT>
 **
-**  core/models: the Nano Banana model tiers and their per-model support for
-**  aspect ratios and output resolution. Google's API validator permissively
-**  accepts all 14 ratios for every model, but per the documentation only Nano
-**  Banana 2 officially supports the four ultra-wide/ultra-tall ratios; Pro and
-**  the 2.5 flash tier support the 10 standard ratios. Resolution support is
-**  enforced by the API (verified): 2.5 flash is 1K only, Pro is 1K/2K/4K, and
-**  Nano Banana 2 adds 512. This module is the single source of truth.
+**  core/models: the Nano Banana model tiers with their aspect ratios and output
+**  resolutions; single source of truth. The four ultra ratios stay on
+**  gemini-3.1-flash-image only: the API accepts them there (verified live
+**  2026-10-02, 1:4 gave a 512x2064 PNG); the docs excerpt checked does not list
+**  them. Verified against the image-generation docs: Lite supports only 1K and
+**  the 10 standard ratios, Pro 1K/2K/4K (no 512). Size 512 was verified live on
+**  gemini-3.1-flash-image. UNVERIFIED: the Pro ratio list (the API validates).
 */
 
 import { ASPECT_RATIOS, type AspectRatio } from "./aspect.js"
 
-/**  the 10 aspect ratios every Gemini image model supports  */
-export const STANDARD_RATIOS: readonly AspectRatio[] =
+/**  the default Gemini image model (Nano Banana Pro)  */
+export const DEFAULT_MODEL = "gemini-3-pro-image"
+
+/**  the 10 standard aspect ratios of the Gemini image tiers  */
+const STANDARD_RATIOS: readonly AspectRatio[] =
     ["1:1", "4:5", "5:4", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"]
 
 /**  the output resolution tokens the Gemini Image API accepts  */
-export const IMAGE_SIZES = ["512", "1K", "2K", "4K"] as const
+const IMAGE_SIZES = ["512", "1K", "2K", "4K"] as const
 
 /**  one accepted output resolution  */
 export type ImageSize = (typeof IMAGE_SIZES)[number]
 
-/**  narrow an arbitrary string to a known resolution token  */
-export const isImageSize = (value: string): value is ImageSize =>
-    (IMAGE_SIZES as readonly string[]).includes(value)
-
 /**  one known image-model tier  */
-export interface ModelInfo {
+interface ModelInfo {
     /**  the Gemini API model id  */
     id: string
     /**  the marketing tier name  */
     name: string
+    /**  the aspect ratios this tier supports  */
+    aspectRatios: readonly AspectRatio[]
     /**  the output resolutions this tier supports  */
     imageSizes: readonly ImageSize[]
 }
 
 /**  the known Nano Banana tiers, in ascending capability  */
 export const MODELS: readonly ModelInfo[] = [
-    { id: "gemini-2.5-flash-image", name: "Nano Banana 1",   imageSizes: ["1K"] },
-    { id: "gemini-3-pro-image",     name: "Nano Banana Pro", imageSizes: ["1K", "2K", "4K"] },
-    { id: "gemini-3.1-flash-image", name: "Nano Banana 2",   imageSizes: ["512", "1K", "2K", "4K"] }
+    { id: "gemini-3.1-flash-lite-image", name: "Nano Banana 2 Lite", aspectRatios: STANDARD_RATIOS, imageSizes: ["1K"] },
+    { id: "gemini-3-pro-image",          name: "Nano Banana Pro",    aspectRatios: STANDARD_RATIOS, imageSizes: ["1K", "2K", "4K"] },
+    { id: "gemini-3.1-flash-image",      name: "Nano Banana 2",      aspectRatios: ASPECT_RATIOS,   imageSizes: IMAGE_SIZES }
 ]
 
 /**
- *  Whether `model` is the Nano Banana 2 tier -- the only one that officially
- *  supports the four ultra-wide/ultra-tall ratios. Matches the stable id and
- *  its `-preview` alias.
+ *  Find the tier for a model id (exact match).
  *
  *  @param model - the Gemini model id
- *  @returns true for the Nano Banana 2 tier
+ *  @returns the matching tier, or undefined for an unknown id
  */
-export const isNanoBanana2 = (model: string): boolean =>
-    model.startsWith("gemini-3.1-flash-image")
+export const imageModelInfo = (model: string): ModelInfo | undefined =>
+    MODELS.find((m) => m.id === model)
 
 /**
- *  The aspect ratios the given `model` officially supports: the extended set
- *  (all 14) for Nano Banana 2, the standard set (10) for every other model.
+ *  The aspect ratios the given `model` supports. Known tiers return their
+ *  set; an unknown id is not second-guessed and gets all 14, leaving the
+ *  final say to the API.
  *
  *  @param model - the Gemini model id
  *  @returns the supported aspect ratios
  */
 export const aspectRatiosForModel = (model: string): readonly AspectRatio[] =>
-    isNanoBanana2(model) ? ASPECT_RATIOS : STANDARD_RATIOS
+    imageModelInfo(model)?.aspectRatios ?? ASPECT_RATIOS
 
 /**
- *  The output resolutions the given `model` supports. Known tiers return their
- *  documented set; an unknown (custom) model id is not second-guessed and gets
- *  the full token set, leaving the final say to the API.
+ *  The output resolutions the given `model` supports. Known tiers return
+ *  their set; an unknown id is not second-guessed and gets the full token
+ *  set, leaving the final say to the API.
  *
  *  @param model - the Gemini model id
  *  @returns the supported resolution tokens
  */
 export const imageSizesForModel = (model: string): readonly ImageSize[] =>
-    MODELS.find((m) => m.id === model)?.imageSizes ?? IMAGE_SIZES
+    imageModelInfo(model)?.imageSizes ?? IMAGE_SIZES

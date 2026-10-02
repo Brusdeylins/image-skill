@@ -8,7 +8,7 @@
 **  one of them stale (a missed plugin.json makes `/plugin` report the old
 **  version). Run after `version-bump.mjs`, as part of `plugin:sync`.
 **
-**  Derived sources (3 files, 3 occurrences):
+**  Derived sources (3 files, 4 occurrences):
 **    plugin/.claude-plugin/plugin.json   version (authoritative for /plugin)
 **    .claude-plugin/marketplace.json     metadata.version + plugins[].version
 **    plugin/skills/image/VERSION         skill self-report
@@ -36,11 +36,10 @@ const patchJson = (rel, expected) => {
     if (hits !== expected)
         throw new Error(`${rel}: expected ${expected} version field(s), found ${hits}`)
     writeFileSync(file, after)
-    return hits
 }
 
 /*  overwrite a plain-text VERSION sidecar  */
-const writeVersionFile = rel =>
+const writeVersionFile = (rel) =>
     writeFileSync(path.join(root, rel), `${version}\n`)
 
 patchJson("plugin/.claude-plugin/plugin.json", 1)

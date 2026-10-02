@@ -19,12 +19,10 @@ export interface OkEnvelope {
     aspect_ratio: string
     /**  the model used  */
     model: string
-    /**  the requested output resolution, when one was given  */
+    /**  the requested output resolution; echoed only when passed explicitly  */
     image_size?: string
-    /**  the requested video resolution, when one was given  */
+    /**  the requested video resolution; echoed only when passed explicitly  */
     resolution?: string
-    /**  the requested video duration in seconds, when one was given  */
-    duration_seconds?: number
 }
 
 /**
@@ -42,10 +40,19 @@ export const emitOk = (env: OkEnvelope): void => {
  *  alike surface as a parseable envelope rather than plain text.
  *
  *  @param message - the human-readable failure reason
- *  @param code - the process exit code (default 1)
+ *  @param code - the process exit code: 2 = usage or credential error, 1 = runtime error (default)
  *  @returns never -- the process terminates
  */
 export const fail = (message: string, code = 1): never => {
     process.stdout.write(`${JSON.stringify({ status: "error", message })}\n`)
     process.exit(code)
 }
+
+/**
+ *  Extract a human-readable message from a thrown value.
+ *
+ *  @param err - the caught value
+ *  @returns the error's message, or its string form when it is not an Error
+ */
+export const errorMessage = (err: unknown): string =>
+    err instanceof Error ? err.message : String(err)

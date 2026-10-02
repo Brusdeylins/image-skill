@@ -1,11 +1,11 @@
 ---
 name: image
 description: >
-  Generate professional images using Google Nano Banana Pro (Gemini Image API)
-  and videos using Google Veo (Gemini Video API). Trigger this skill when the
-  user wants to generate, create, or produce images, photos, illustrations,
-  visuals, videos, clips, or animations, or when another skill needs an image
-  or video for a given aspect ratio.
+  Generate professional images using Google Nano Banana (Gemini Image API)
+  and videos using Gemini Omni (Gemini video). Trigger this skill
+  when the user wants to generate, create, or produce images, photos,
+  illustrations, visuals, videos, clips, or animations, or when another skill
+  needs an image or video for a given aspect ratio.
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -24,16 +24,15 @@ and in cinematic video generation.
   consistent across edits. Examples: recolor/retouch, background replacement,
   style transfer, merging a product into a scene, character consistency.
 - **Text-to-video / image-to-video**: `--video` generates an MP4 clip (with
-  native audio) via the Veo models; one optional `--input` image animates a
-  still. Options: `--resolution` (`720p`/`1080p`), `--duration` (seconds,
-  model-dependent), `--negative-prompt`.
+  native audio) via the Omni model; one optional `--input` image animates a
+  still. Options: `--resolution` (`360p`/`720p`/`1080p`/`4k`) and
+  `--negative-prompt`. The clip length is not controllable.
 - **Aspect ratio**: `--aspect-ratio` (model-dependent set).
 - **Resolution**: `--image-size` (`512`/`1K`/`2K`/`4K`, model-dependent).
-- **Model choice**: `--model` across the Nano Banana and Veo tiers
+- **Model choice**: `--model` across the Nano Banana tiers and Omni
   (`--list-models`).
 
-Output is a PNG (image) or an MP4 (`--video`); every run prints one JSON
-envelope on stdout.
+Every run prints one JSON envelope on stdout.
 
 ## Execution Rules
 
@@ -43,13 +42,14 @@ envelope on stdout.
 - Run the generator as `node <skill-dir/>/scripts/nano-banana.mjs <args>`
   (needs Node >= 20; if `node --version` fails, tell the user to install Node
   20+ and stop).
-- Execute each Bash call as a separate tool call (parallel when independent).
-- Output is a PNG file, or an MP4 file with `--video`.
+- Execute each Bash call as a separate tool call; for several generations see
+  Batch Generation (sequential).
 - Pick the aspect ratio with `--aspect-ratio` (default 16:9); it is validated
   against the chosen model's supported set.
-- A `--video` run is a long-running operation: the CLI polls the API and can
-  take 1-6 minutes; give the Bash call a timeout of at least 10 minutes and do
-  not kill it early.
+- A `--video` run is a long-running operation (one blocking request plus file
+  polling) and can take 1-6 minutes; give the Bash call a timeout of at least 10 minutes and do not kill it early.
+- Only pass `--output`, `--input` and `--key-file` paths inside the working
+  directory; the CLI writes and reads wherever it is told.
 - Every run emits exactly one JSON envelope on stdout (`{"status":"ok",...}` or
   `{"status":"error",...}`); parse it, react to errors, do not retry blindly.
 
@@ -58,7 +58,8 @@ envelope on stdout.
 The API key is **never stored in this project**. It is read from the
 environment at call time, from `GEMINI_API_KEY` (or `GOOGLE_API_KEY`).
 `--key-file <path>` exists only as an override for a secret mounted OUTSIDE the
-project tree (CI).
+project tree (CI). The key must be visible ASCII; stray whitespace or a line
+break is a usage error (exit 2) that never echoes the value.
 
 If the key is missing, the run fails with an actionable error. Tell the user to
 set the variable for their shell and stop:
@@ -81,8 +82,8 @@ store (macOS keychain / Windows certificate store), where corporate IT
 installed the Zscaler root, into Node's default CA set — so no env var, no
 shell prefix and **no bundled certificate** are needed. Just run it normally.
 
-Manual overrides remain for unusual setups (Node without
-`tls.setDefaultCACertificates`, e.g. Node 22.x, or a cert not in the OS store):
+Manual overrides remain for unusual setups (Node versions
+without `tls.setDefaultCACertificates`, or a cert not in the OS store):
 
 - `NODE_EXTRA_CA_CERTS=/path/to/zscaler-root.crt` — a cert file outside the repo.
 - `NODE_OPTIONS=--use-system-ca` — the equivalent Node flag.
@@ -116,11 +117,11 @@ node <skill-dir/>/scripts/nano-banana.mjs \
 node <skill-dir/>/scripts/nano-banana.mjs \
   --prompt "..." --output image.png --image-size 4K
 
-# With a specific model + an extreme ratio (Nano Banana 2 only)
+# With a specific model + an extreme ratio (Nano Banana 2 only; the API accepts it, verified live 2026-10-02)
 node <skill-dir/>/scripts/nano-banana.mjs \
   --prompt "..." --output image.png --model gemini-3.1-flash-image --aspect-ratio 1:4
 
-# Text-to-video (Veo 3, 16:9, 8 s, native audio; takes 1-6 minutes)
+# Text-to-video (Omni, 16:9, native audio; takes 1-6 minutes)
 node <skill-dir/>/scripts/nano-banana.mjs \
   --video --prompt "..." --output clip.mp4
 
@@ -129,10 +130,10 @@ node <skill-dir/>/scripts/nano-banana.mjs \
   --video --prompt "the scene comes to life, gentle wind" \
   --input scene.png --output scene.mp4
 
-# Portrait short with explicit duration/resolution (Veo 3.1 preview)
+# Portrait short on Omni (clip length is not controllable)
 node <skill-dir/>/scripts/nano-banana.mjs \
   --video --prompt "..." --output short.mp4 \
-  --model veo-3.1-generate-preview --aspect-ratio 9:16 --duration 6 --resolution 1080p
+  --aspect-ratio 9:16 --resolution 1080p
 
 # List all models with their supported ratios and resolutions
 node <skill-dir/>/scripts/nano-banana.mjs --list-models
@@ -142,52 +143,57 @@ node <skill-dir/>/scripts/nano-banana.mjs --list-models
 
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `--prompt` | yes | -- | Generation/edit prompt (English recommended) |
-| `--output` | yes | -- | Output file path: PNG (image) or MP4 (`--video`) |
-| `--input` | no | -- | Reference image; **repeatable** (1-14) for image-to-image, exactly **1** for image-to-video (PNG/JPEG/WEBP, <=7 MB each) |
+| `--prompt` | yes | -- | Generation/edit prompt (English recommended); an empty or whitespace-only prompt is a usage error (exit 2) |
+| `--output` | yes | -- | Output file path: PNG (image) or MP4 (`--video`); its parent directory must exist; an empty value or a directory is a usage error (exit 2) |
+| `--input` | no | -- | Reference image; **repeatable** (1-14) for image-to-image, exactly **1** for image-to-video (PNG/JPEG/WEBP, <=7 MiB each, <=20 MB (decimal) in total with the prompt; exit 2 above) |
 | `--aspect-ratio` | no | 16:9 | Aspect ratio; **model-dependent** set (see Models) |
 | `--image-size` | no | model default | Image output resolution (`512`/`1K`/`2K`/`4K`); **model-dependent** |
-| `--video` | -- | -- | Generate an MP4 video via Veo instead of a PNG image |
-| `--resolution` | no | model default (720p) | Video resolution (`720p`/`1080p`); `--video` only |
-| `--duration` | no | model default | Video clip duration in seconds; **model-dependent** (`--video` only) |
+| `--video` | -- | -- | Generate an MP4 video via Omni instead of a PNG image |
+| `--resolution` | no | model default | Video resolution (`360p`/`720p`/`1080p`/`4k`), **model-dependent**; `--video` only |
 | `--negative-prompt` | no | -- | What the video must NOT contain; `--video` only |
-| `--model` | no | gemini-3-pro-image / veo-3.0-generate-001 | Gemini model ID (see Models) |
+| `--model` | no | gemini-3-pro-image / gemini-omni-1.1-flash | Gemini model ID (see Models) |
 | `--key-file` | no | environment | Path to API key file (override; default reads env) |
-| `--list-models` | -- | -- | List models with supported ratios/resolutions and exit |
+| `--list-models` | -- | -- | List models with their aspect ratios and resolutions, and exit |
 
 Both `--flag value` and `--flag=value` are accepted; unknown flags are rejected.
 
 ### Models
 
 Image default is **`gemini-3-pro-image`** (Nano Banana Pro, stable); video
-default is **`veo-3.0-generate-001`** (Veo 3, GA). The former image `-preview`
-aliases are deprecated; prefer the stable ids.
+default is **`gemini-omni-1.1-flash`** (Gemini Omni Flash). Model ids match
+exactly; an unknown id (e.g. a former `-preview` alias, which the API rejects)
+gets the full ratio and size sets and the API decides.
 
 | Model ID | Tier | Aspect ratios | Resolutions |
 |----------|------|---------------|-------------|
-| `gemini-2.5-flash-image` | Nano Banana 1 | 10 standard | `1K` |
+| `gemini-3.1-flash-lite-image` | Nano Banana 2 Lite | 10 standard | `1K` |
 | `gemini-3-pro-image` (default) | Nano Banana Pro | 10 standard | `1K`, `2K`, `4K` |
 | `gemini-3.1-flash-image` | Nano Banana 2 | 14 (standard + 4) | `512`, `1K`, `2K`, `4K` |
 
 - **Standard ratios (10):** `1:1, 4:5, 5:4, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9`
-- **Nano Banana 2 adds (4):** `1:4, 4:1, 1:8, 8:1` (ultra-wide / ultra-tall)
+- **Nano Banana 2 adds (4):** `1:4, 4:1, 1:8, 8:1` (ultra-wide / ultra-tall),
+  accepted by the API on `gemini-3.1-flash-image` only
+- **Unverified:** the Pro ratio list (the API validates); the README has the
+  evidence.
+- **Reference images:** the CLI caps `--input` at 14; per-model limits differ
+  per Google, enforcement UNVERIFIED.
 
-| Video model ID | Tier | Aspect ratios | Resolutions | Durations |
-|----------------|------|---------------|-------------|-----------|
-| `veo-3.0-generate-001` (default) | Veo 3 | `16:9` | `720p`, `1080p` | 8 s |
-| `veo-3.0-fast-generate-001` | Veo 3 Fast | `16:9` | `720p`, `1080p` | 8 s |
-| `veo-3.1-generate-preview` | Veo 3.1 | `16:9`, `9:16` | `720p`, `1080p` | 4/6/8 s |
-| `veo-3.1-fast-generate-preview` | Veo 3.1 Fast | `16:9`, `9:16` | `720p`, `1080p` | 4/6/8 s |
-| `veo-3.1-lite-generate-preview` | Veo 3.1 Lite | `16:9`, `9:16` | `720p`, `1080p` | 4/6/8 s |
+| Video model ID | Tier | Aspect ratios | Resolutions | Duration |
+|----------------|------|---------------|-------------|----------|
+| `gemini-omni-1.1-flash` (default) | Gemini Omni Flash | `16:9`, `9:16` | `360p`, `720p`, `1080p`, `4k` | not controllable |
 
-All Veo 3 tiers generate native audio. Pick a Veo 3.1 preview tier when the
-user needs portrait `9:16` or a 4/6 s clip; otherwise stay on the GA default.
+Omni generates native audio and runs through the Interactions API (always URI
+delivery, file polled until ACTIVE, streamed download). The clip length cannot
+be controlled (there is no option); the CLI sends no duration and appends
+`--negative-prompt` to the prompt as natural language. UNVERIFIED: the Omni
+clip length and the `task` setting are not confirmed by the docs (the CLI never
+sends them); `1080p`/`4k` are upscaled; WEBP input for video is not documented.
+An unknown model id is sent to the Interactions API as is.
 
-`--aspect-ratio`, `--image-size`, `--resolution` and `--duration` are each
-validated against the chosen model's set; an unsupported value (e.g. `1:4` or
-`512` on Pro, `2K` on Nano Banana 1, `9:16` on Veo 3.0) is a usage error
-(exit 2). Without them the model uses its own default. Run `--list-models`
-for the full per-model lists.
+`--aspect-ratio`, `--image-size` and `--resolution` are each validated against
+the chosen model's set; an unsupported value (e.g. `1:4` or `512` on Pro) is a
+usage error (exit 2). Without them the model uses its own default. Run
+`--list-models` for the full per-model lists.
 
 ### Output and exit codes
 

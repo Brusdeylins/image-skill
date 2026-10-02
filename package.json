@@ -1,11 +1,11 @@
 {
   "name": "@brusdeylins/nano-banana",
-  "version": "0.10.0",
-  "description": "Deterministic image/video-generation CLI for LLM agents: Google Nano Banana (Gemini Image API) and Veo (Gemini Video API) -- text-to-image, image-to-image and text/image-to-video, model-aware aspect ratios and resolutions",
+  "version": "0.11.0",
+  "description": "Deterministic image/video-generation CLI for LLM agents: Google Nano Banana (Gemini Image API), Gemini Omni (Gemini video) -- text-to-image, image-to-image and text/image-to-video, model-aware aspect ratios and resolutions",
   "keywords": [
     "gemini",
     "nano-banana",
-    "veo",
+    "omni",
     "image-generation",
     "image-editing",
     "image-to-image",
@@ -44,8 +44,7 @@
     "plugin:sync": "npm run build && cp dst/nano-banana.mjs plugin/skills/image/scripts/nano-banana.mjs && node scripts/sync-versions.mjs",
     "test": "vitest run",
     "lint": "eslint src test && tsc --noEmit",
-    "prepublishOnly": "npm run lint && npm run test && npm run build",
-    "pretest": "npm run build"
+    "prepublishOnly": "npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",

@@ -5,43 +5,52 @@
 **
 **  infra/args: parse the command line via Node's built-in `util.parseArgs`.
 **  Declaring every option up front yields both `--flag value` and `--flag=value`
-**  forms, lets a value begin with `--`, and rejects unknown flags -- removing
-**  the bespoke parsing edge cases a hand-rolled parser would carry.
+**  forms and rejects unknown flags. With strict parsing a space-separated value
+**  cannot begin with `-`; only the `--flag=value` form carries such a value.
 */
 
 import { parseArgs as nodeParseArgs } from "node:util"
 
-/**  the parsed option values, keyed by flag name without the dashes  */
-export interface CliValues {
-    /**  image generation prompt  */
-    "prompt": string | undefined
-    /**  output PNG path  */
-    "output": string | undefined
+/**  the option declarations: one source for parsing and for the values type  */
+const OPTIONS = {
+    /**  generation prompt  */
+    "prompt":          { type: "string" },
+    /**  PNG or MP4 output path  */
+    "output":          { type: "string" },
     /**  reference/input image paths (repeatable)  */
-    "input": string[] | undefined
+    "input":           { type: "string", multiple: true },
     /**  explicit aspect ratio  */
-    "aspect-ratio": string | undefined
-    /**  output resolution  */
-    "image-size": string | undefined
-    /**  video mode switch (Veo)  */
-    "video": boolean | undefined
+    "aspect-ratio":    { type: "string" },
+    /**  image output resolution  */
+    "image-size":      { type: "string" },
+    /**  video mode switch (Omni)  */
+    "video":           { type: "boolean" },
     /**  video output resolution  */
-    "resolution": string | undefined
-    /**  video clip duration in seconds  */
-    "duration": string | undefined
+    "resolution":      { type: "string" },
     /**  what the video must NOT contain  */
-    "negative-prompt": string | undefined
+    "negative-prompt": { type: "string" },
     /**  Gemini model id  */
-    "model": string | undefined
+    "model":           { type: "string" },
     /**  path to an API key file (override)  */
-    "key-file": string | undefined
+    "key-file":        { type: "string" },
     /**  list models switch  */
-    "list-models": boolean | undefined
+    "list-models":     { type: "boolean" },
     /**  print-version switch  */
-    "version": boolean | undefined
+    "version":         { type: "boolean" },
     /**  print-help switch  */
-    "help": boolean | undefined
-}
+    "help":            { type: "boolean" }
+} as const
+
+/**  run `util.parseArgs` strictly over the declared options  */
+const parse = (args: string[]) => nodeParseArgs({
+    args,
+    strict: true,
+    allowPositionals: false,
+    options: OPTIONS
+})
+
+/**  the parsed option values, keyed by flag name without the dashes  */
+export type CliValues = ReturnType<typeof parse>["values"]
 
 /**
  *  Parse `argv` (without the node/script head) into typed option values.
@@ -53,24 +62,4 @@ export interface CliValues {
  *  @returns the parsed option values
  */
 export const parseCli = (argv: readonly string[]): CliValues =>
-    nodeParseArgs({
-        args: [...argv],
-        strict: true,
-        allowPositionals: false,
-        options: {
-            "prompt":        { type: "string" },
-            "output":        { type: "string" },
-            "input":         { type: "string", multiple: true },
-            "aspect-ratio":  { type: "string" },
-            "image-size":    { type: "string" },
-            "video":         { type: "boolean" },
-            "resolution":    { type: "string" },
-            "duration":      { type: "string" },
-            "negative-prompt": { type: "string" },
-            "model":         { type: "string" },
-            "key-file":      { type: "string" },
-            "list-models":   { type: "boolean" },
-            "version":       { type: "boolean" },
-            "help":          { type: "boolean" }
-        }
-    }).values as CliValues
+    parse([...argv]).values

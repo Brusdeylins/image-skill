@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.11.0
+
+- Image models verified against the current Gemini API docs: new
+  `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite, 10 standard ratios, `1K`
+  only). The stable `gemini-3-pro-image` default is unchanged. Image responses skip `thought`
+  parts.
+- Extreme ratios `1:4`, `4:1`, `1:8`, `8:1` on `gemini-3.1-flash-image` and
+  size `512` are accepted by the API (verified live 2026-10-02); the docs
+  excerpt checked does not list the ratios. Unknown model ids get the full
+  ratio and size sets; known ids match exactly and get their tier's set.
+- Video: new default `gemini-omni-1.1-flash` (Gemini Omni Flash), the
+  successor of Veo, via the Gemini Interactions API (`POST /v1beta/interactions`):
+  16:9/9:16, `360p`/`720p`/`1080p`/`4k`, native audio, image-to-video. The CLI
+  always requests URI delivery (the file is polled until ACTIVE, then streamed
+  to disk) and sends no duration (clip length is not controllable);
+  `--negative-prompt` is appended to the prompt as text. The Omni clip length
+  and the `task` setting are UNVERIFIED (not confirmed by the docs).
+- Omni hardening: the API key is only sent to the
+  `generativelanguage.googleapis.com` origin over https (redirects are
+  followed manually, never forwarding the key to another origin); one shared
+  deadline covers POST, polling and download, with a per-request timeout and
+  a friendly "timed out" message; `res.ok` is checked before parsing JSON, and
+  a non-JSON 200 body is reported as `Video generation failed: invalid API
+  response`; a file URI carrying a username or password is refused.
+- Video downloads are written to `<output>.<random>.part`
+  (created exclusively with flag `wx`) and renamed on success, so a failure
+  never destroys an existing output file.
+- Verified live on 2026-10-02: an Omni 9:16 `720p` clip with the final code
+  and a `1080p` clip with the same URI flow before the final hardening
+  (text-to-video only; image-to-video and `4k` were not run live).
+- Removed models that are ending: Veo 3.0 was shut down by Google on
+  2026-06-30 and the Veo 3.1 previews end no earlier than 2026-10-22, so the
+  whole Veo path (and its Google SDK video code) is gone; Omni is the only
+  video model. `--duration` and the `duration_seconds` envelope field are
+  removed because Omni has no clip length. `gemini-2.5-flash-image` is removed
+  because Google shuts it down on 2026-10-02, together with the stderr
+  shutdown note and the shutdown dates in `--list-models`. The `-preview`
+  image aliases are no longer recognised (all are shut down); they are treated
+  as unknown ids. WEBP input for video is not documented (UNVERIFIED).
+- Usage errors (exit 2): `--video` with an image model id (or image mode with
+  a video model id; unknown `gemini-omni*` ids count as Omni); a missing, unreadable or invalid API key (whitespace or
+  a line break; the value is never echoed); an empty or whitespace-only
+  `--prompt`; an empty `--output` or one that is a directory; an `--output`
+  directory that does not exist (checked before generating, so a paid
+  generation is never lost to a bad path); inline input above 20 MB in total
+  (Google's documented request limit; the 7 MiB per-image limit is a CLI cap).
+- An image request that hits the deadline reports `Image generation timed out
+  after 120s` instead of the raw SDK abort error.
+- `--help` no longer carries static model tables; it points to `--list-models`.
+
 ## 0.10.0
 
 - Video generation via Google Veo (Gemini Video API): new `--video` switch

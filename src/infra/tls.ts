@@ -8,9 +8,9 @@
 **  (Zscaler) the API handshake would fail. This merges the system store --
 **  where corporate IT installed the Zscaler root -- into the default CA set at
 **  startup, so HTTPS just works WITHOUT any env var, shell prefix or bundled
-**  certificate. It is a no-op on Node versions lacking the system-CA API,
-**  where NODE_EXTRA_CA_CERTS / NODE_OPTIONS=--use-system-ca remain the manual
-**  fallback.
+**  certificate. It is a no-op on Node versions without
+**  tls.setDefaultCACertificates, where NODE_EXTRA_CA_CERTS /
+**  NODE_OPTIONS=--use-system-ca remain the manual fallback.
 **
 **  The `node:tls` members are reached through the live module object via
 **  `createRequire`, NOT a static `import { setDefaultCACertificates }`: on Node
@@ -38,7 +38,7 @@ export const trustSystemCAs = (): void => {
         const current = tls.getCACertificates("default")
         const system  = tls.getCACertificates("system")
         if (system.length > 0)
-            tls.setDefaultCACertificates([...current, ...system])
+            tls.setDefaultCACertificates([...new Set([...current, ...system])])
     }
     catch {
         /*  keep the bundled defaults; NODE_EXTRA_CA_CERTS still applies  */

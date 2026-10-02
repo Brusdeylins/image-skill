@@ -20,11 +20,11 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 const JPEG_SOI = Buffer.from([0xff, 0xd8])
 
 /**  whether `bytes` already begin with the PNG signature  */
-const isPng = (bytes: Buffer): boolean =>
+export const isPng = (bytes: Buffer): boolean =>
     bytes.length >= 8 && bytes.subarray(0, 8).equals(PNG_SIGNATURE)
 
 /**  whether `bytes` begin with the JPEG start-of-image marker  */
-const isJpeg = (bytes: Buffer): boolean =>
+export const isJpeg = (bytes: Buffer): boolean =>
     bytes.length >= 2 && bytes.subarray(0, 2).equals(JPEG_SOI)
 
 /**

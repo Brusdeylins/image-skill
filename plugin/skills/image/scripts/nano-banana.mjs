@@ -316,7 +316,7 @@ var require_p_retry = __commonJS({
       error.retriesLeft = retriesLeft;
       return error;
     };
-    var isNetworkError = (errorMessage) => networkErrorMsgs.includes(errorMessage);
+    var isNetworkError = (errorMessage2) => networkErrorMsgs.includes(errorMessage2);
     var pRetry2 = (input, options) => new Promise((resolve, reject) => {
       options = {
         onFailedAttempt: () => {
@@ -943,7 +943,7 @@ var require_ms = __commonJS({
       options = options || {};
       var type = typeof val;
       if (type === "string" && val.length > 0) {
-        return parse(val);
+        return parse2(val);
       } else if (type === "number" && isFinite(val)) {
         return options.long ? fmtLong(val) : fmtShort(val);
       }
@@ -951,7 +951,7 @@ var require_ms = __commonJS({
         "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
       );
     };
-    function parse(str) {
+    function parse2(str) {
       str = String(str);
       if (str.length > 100) {
         return;
@@ -20823,7 +20823,7 @@ var require_extension = __commonJS({
       if (dest[name] === void 0) dest[name] = [elem];
       else dest[name].push(elem);
     }
-    function parse(header) {
+    function parse2(header) {
       const offers = /* @__PURE__ */ Object.create(null);
       let params = /* @__PURE__ */ Object.create(null);
       let mustUnescape = false;
@@ -20963,7 +20963,7 @@ var require_extension = __commonJS({
         }).join(", ");
       }).join(", ");
     }
-    module.exports = { format, parse };
+    module.exports = { format, parse: parse2 };
   }
 });
 
@@ -20976,8 +20976,8 @@ var require_websocket = __commonJS({
     var http3 = __require("http");
     var net = __require("net");
     var tls2 = __require("tls");
-    var { randomBytes, createHash } = __require("crypto");
-    var { Duplex, Readable: Readable2 } = __require("stream");
+    var { randomBytes: randomBytes2, createHash } = __require("crypto");
+    var { Duplex, Readable: Readable3 } = __require("stream");
     var { URL: URL2 } = __require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
     var Receiver2 = require_receiver();
@@ -20997,7 +20997,7 @@ var require_websocket = __commonJS({
     var {
       EventTarget: { addEventListener, removeEventListener }
     } = require_event_target();
-    var { format, parse } = require_extension();
+    var { format, parse: parse2 } = require_extension();
     var { toBuffer } = require_buffer_util();
     var kAborted = /* @__PURE__ */ Symbol("kAborted");
     var protocolVersions = [8, 13];
@@ -21514,7 +21514,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes(16).toString("base64");
+      const key = randomBytes2(16).toString("base64");
       const request = isSecure ? https2.request : http3.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -21674,7 +21674,7 @@ var require_websocket = __commonJS({
           }
           let extensions;
           try {
-            extensions = parse(secWebSocketExtensions);
+            extensions = parse2(secWebSocketExtensions);
           } catch (err) {
             const message = "Invalid Sec-WebSocket-Extensions header";
             abortHandshake(websocket, socket, message);
@@ -21966,7 +21966,7 @@ var require_subprotocol = __commonJS({
   "node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
-    function parse(header) {
+    function parse2(header) {
       const protocols = /* @__PURE__ */ new Set();
       let start = -1;
       let end = -1;
@@ -22002,7 +22002,7 @@ var require_subprotocol = __commonJS({
       protocols.add(protocol);
       return protocols;
     }
-    module.exports = { parse };
+    module.exports = { parse: parse2 };
   }
 });
 
@@ -24002,7 +24002,7 @@ var require_decoder = __commonJS({
           }).bind(this);
           xhr.send(null);
         },
-        parse: function parse(data) {
+        parse: function parse2(data) {
           var maxResolutionInPixels = this.opts.maxResolutionInMP * 1e3 * 1e3;
           var offset = 0, length = data.length;
           function readUint16() {
@@ -26498,10 +26498,10 @@ var require_packer_sync = __commonJS({
 var require_png_sync = __commonJS({
   "node_modules/pngjs/lib/png-sync.js"(exports) {
     "use strict";
-    var parse = require_parser_sync();
+    var parse2 = require_parser_sync();
     var pack = require_packer_sync();
     exports.read = function(buffer, options) {
-      return parse(buffer, options || {});
+      return parse2(buffer, options || {});
     };
     exports.write = function(png, options) {
       return pack(png, options);
@@ -26646,44 +26646,74 @@ var require_png = __commonJS({
   }
 });
 
+// src/cli/main.ts
+import { statSync as statSync3 } from "node:fs";
+import { dirname, sep } from "node:path";
+
 // src/infra/args.ts
 import { parseArgs as nodeParseArgs } from "node:util";
-var parseCli = (argv) => nodeParseArgs({
-  args: [...argv],
+var OPTIONS = {
+  /**  generation prompt  */
+  "prompt": { type: "string" },
+  /**  PNG or MP4 output path  */
+  "output": { type: "string" },
+  /**  reference/input image paths (repeatable)  */
+  "input": { type: "string", multiple: true },
+  /**  explicit aspect ratio  */
+  "aspect-ratio": { type: "string" },
+  /**  image output resolution  */
+  "image-size": { type: "string" },
+  /**  video mode switch (Omni)  */
+  "video": { type: "boolean" },
+  /**  video output resolution  */
+  "resolution": { type: "string" },
+  /**  what the video must NOT contain  */
+  "negative-prompt": { type: "string" },
+  /**  Gemini model id  */
+  "model": { type: "string" },
+  /**  path to an API key file (override)  */
+  "key-file": { type: "string" },
+  /**  list models switch  */
+  "list-models": { type: "boolean" },
+  /**  print-version switch  */
+  "version": { type: "boolean" },
+  /**  print-help switch  */
+  "help": { type: "boolean" }
+};
+var parse = (args) => nodeParseArgs({
+  args,
   strict: true,
   allowPositionals: false,
-  options: {
-    "prompt": { type: "string" },
-    "output": { type: "string" },
-    "input": { type: "string", multiple: true },
-    "aspect-ratio": { type: "string" },
-    "image-size": { type: "string" },
-    "video": { type: "boolean" },
-    "resolution": { type: "string" },
-    "duration": { type: "string" },
-    "negative-prompt": { type: "string" },
-    "model": { type: "string" },
-    "key-file": { type: "string" },
-    "list-models": { type: "boolean" },
-    "version": { type: "boolean" },
-    "help": { type: "boolean" }
-  }
-}).values;
+  options: OPTIONS
+});
+var parseCli = (argv) => parse([...argv]).values;
 
 // src/infra/apikey.ts
 import { readFileSync } from "node:fs";
 var KEY_ENV_VARS = ["GEMINI_API_KEY", "GOOGLE_API_KEY"];
+var HEADER_SAFE_KEY = /^[\x21-\x7e]+$/;
+var assertHeaderSafe = (key) => {
+  if (!HEADER_SAFE_KEY.test(key))
+    throw new Error("API key contains characters that are not valid in an HTTP header (stray whitespace or line break?)");
+  return key;
+};
 var resolveApiKey = (keyFile) => {
   if (keyFile !== void 0) {
-    const key = readFileSync(keyFile, "utf8").trim();
+    let raw;
+    try {
+      raw = readFileSync(keyFile, "utf8");
+    } catch (err) {
+      throw new Error(`cannot read API key file: ${keyFile}`, { cause: err });
+    }
+    const key = raw.trim();
     if (key === "")
       throw new Error(`API key file is empty: ${keyFile}`);
-    return key;
+    return assertHeaderSafe(key);
   }
   for (const name of KEY_ENV_VARS) {
     const value = process.env[name]?.trim();
     if (value !== void 0 && value !== "")
-      return value;
+      return assertHeaderSafe(value);
   }
   throw new Error(
     `No API key found. Set ${KEY_ENV_VARS.join(" or ")} in the environment, or pass --key-file <path>. The key is NEVER stored in this project.`
@@ -26701,7 +26731,7 @@ var trustSystemCAs = () => {
     const current = tls.getCACertificates("default");
     const system = tls.getCACertificates("system");
     if (system.length > 0)
-      tls.setDefaultCACertificates([...current, ...system]);
+      tls.setDefaultCACertificates([.../* @__PURE__ */ new Set([...current, ...system])]);
   } catch {
   }
 };
@@ -26716,9 +26746,10 @@ var fail = (message, code = 1) => {
 `);
   process.exit(code);
 };
+var errorMessage = (err) => err instanceof Error ? err.message : String(err);
 
 // src/infra/version.ts
-var VERSION = true ? "0.10.0" : "0.0.0-dev";
+var VERSION = true ? "0.11.0" : "0.0.0-dev";
 var PACKAGE = true ? "@brusdeylins/nano-banana" : "@brusdeylins/nano-banana";
 
 // src/core/generate.ts
@@ -37893,10 +37924,10 @@ var ApiClient = class {
               const errorJson = JSON.parse(JSON.stringify(chunkJson["error"]));
               const status = errorJson["status"];
               const code = errorJson["code"];
-              const errorMessage = `got status: ${status}. ${JSON.stringify(chunkJson)}`;
+              const errorMessage2 = `got status: ${status}. ${JSON.stringify(chunkJson)}`;
               if (code >= 400 && code < 600) {
                 const apiError = new ApiError({
-                  message: errorMessage,
+                  message: errorMessage2,
                   status: code
                 });
                 throw apiError;
@@ -38123,15 +38154,15 @@ async function throwErrorIfNotOK(response) {
         }
       };
     }
-    const errorMessage = JSON.stringify(errorBody);
+    const errorMessage2 = JSON.stringify(errorBody);
     if (status >= 400 && status < 600) {
       const apiError = new ApiError({
-        message: errorMessage,
+        message: errorMessage2,
         status
       });
       throw apiError;
     }
-    throw new Error(errorMessage);
+    throw new Error(errorMessage2);
   }
 }
 function includeExtraBodyToRequestInit(requestInit, extraBody) {
@@ -44780,8 +44811,7 @@ var toPng = (bytes, mimeType) => {
 };
 
 // src/core/generate.ts
-var DEFAULT_MODEL = "gemini-3-pro-image";
-var DEFAULT_TIMEOUT_MS = 12e4;
+var IMAGE_TIMEOUT_MS = 12e4;
 var generateImage = async (input) => {
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
   const imageConfig = { aspectRatio: input.aspectRatio };
@@ -44791,27 +44821,34 @@ var generateImage = async (input) => {
     { text: input.prompt },
     ...input.inputImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))
   ] : input.prompt;
-  const response = await ai.models.generateContent({
-    model: input.model,
-    contents,
-    config: {
-      responseModalities: ["IMAGE"],
-      imageConfig,
-      abortSignal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS)
-    }
-  });
+  const signal = AbortSignal.timeout(IMAGE_TIMEOUT_MS);
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model: input.model,
+      contents,
+      config: { responseModalities: ["IMAGE"], imageConfig, abortSignal: signal }
+    });
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "";
+    if (name === "TimeoutError" || name === "AbortError" && signal.aborted)
+      throw new Error(`Image generation timed out after ${IMAGE_TIMEOUT_MS / 1e3}s`, { cause: err });
+    throw err;
+  }
   const candidate = response.candidates?.[0];
   const parts = candidate?.content?.parts ?? [];
   for (const part of parts) {
-    const data = part.inlineData?.data;
-    if (data !== void 0 && data !== "") {
-      const png = toPng(Buffer.from(data, "base64"), part.inlineData?.mimeType);
+    if (part.thought === true)
+      continue;
+    const inline = part.inlineData;
+    if (inline?.data !== void 0 && inline.data !== "") {
+      const png = toPng(Buffer.from(inline.data, "base64"), inline.mimeType);
       writeFileSync(input.outputPath, png);
       return { file: input.outputPath, aspectRatio: input.aspectRatio, model: input.model };
     }
   }
   const reason = response.promptFeedback?.blockReason ?? candidate?.finishReason;
-  const text = parts.map((part) => part.text).filter(Boolean).join(" ");
+  const text = parts.filter((part) => part.thought !== true).map((part) => part.text).filter(Boolean).join(" ");
   const detail = [reason, text].filter(Boolean).join(": ");
   throw new Error(detail !== "" ? `No image returned (${detail})` : "No image returned by API");
 };
@@ -44833,88 +44870,197 @@ var ASPECT_RATIOS = [
   "1:8",
   "8:1"
 ];
-var isAspectRatio = (value) => ASPECT_RATIOS.includes(value);
 
 // src/core/models.ts
+var DEFAULT_MODEL = "gemini-3-pro-image";
 var STANDARD_RATIOS = ["1:1", "4:5", "5:4", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"];
 var IMAGE_SIZES = ["512", "1K", "2K", "4K"];
-var isImageSize = (value) => IMAGE_SIZES.includes(value);
 var MODELS = [
-  { id: "gemini-2.5-flash-image", name: "Nano Banana 1", imageSizes: ["1K"] },
-  { id: "gemini-3-pro-image", name: "Nano Banana Pro", imageSizes: ["1K", "2K", "4K"] },
-  { id: "gemini-3.1-flash-image", name: "Nano Banana 2", imageSizes: ["512", "1K", "2K", "4K"] }
+  { id: "gemini-3.1-flash-lite-image", name: "Nano Banana 2 Lite", aspectRatios: STANDARD_RATIOS, imageSizes: ["1K"] },
+  { id: "gemini-3-pro-image", name: "Nano Banana Pro", aspectRatios: STANDARD_RATIOS, imageSizes: ["1K", "2K", "4K"] },
+  { id: "gemini-3.1-flash-image", name: "Nano Banana 2", aspectRatios: ASPECT_RATIOS, imageSizes: IMAGE_SIZES }
 ];
-var isNanoBanana2 = (model) => model.startsWith("gemini-3.1-flash-image");
-var aspectRatiosForModel = (model) => isNanoBanana2(model) ? ASPECT_RATIOS : STANDARD_RATIOS;
-var imageSizesForModel = (model) => MODELS.find((m2) => m2.id === model)?.imageSizes ?? IMAGE_SIZES;
+var imageModelInfo = (model) => MODELS.find((m2) => m2.id === model);
+var aspectRatiosForModel = (model) => imageModelInfo(model)?.aspectRatios ?? ASPECT_RATIOS;
+var imageSizesForModel = (model) => imageModelInfo(model)?.imageSizes ?? IMAGE_SIZES;
 
 // src/core/video.ts
-import { writeFileSync as writeFileSync2 } from "node:fs";
-var DEFAULT_VIDEO_MODEL = "veo-3.0-generate-001";
+import { randomBytes } from "node:crypto";
+import { createWriteStream as createWriteStream2, renameSync, rmSync } from "node:fs";
+import { Readable as Readable2 } from "node:stream";
+import { pipeline as pipeline2 } from "node:stream/promises";
+var DEFAULT_VIDEO_MODEL = "gemini-omni-1.1-flash";
+var API_HOST = "generativelanguage.googleapis.com";
+var API_ORIGIN = `https://${API_HOST}`;
+var INTERACTIONS_URL = `${API_ORIGIN}/v1beta/interactions`;
+var DOWNLOAD_SUFFIX = ":download";
+var MAX_REDIRECTS = 5;
+var PROGRESS_NOTE = "video generation in progress...\n";
 var VIDEO_POLL_MS = 1e4;
 var VIDEO_TIMEOUT_MS = 6e5;
-var VIDEO_RESOLUTIONS = ["720p", "1080p"];
-var isVideoResolution = (value) => VIDEO_RESOLUTIONS.includes(value);
-var VIDEO_DURATIONS = [4, 6, 8];
-var isVideoDuration = (value) => VIDEO_DURATIONS.includes(value);
+var VIDEO_RESOLUTIONS = ["360p", "720p", "1080p", "4k"];
+var VIDEO_RATIOS = ["16:9", "9:16"];
 var VIDEO_MODELS = [
-  { id: "veo-3.0-generate-001", name: "Veo 3", aspectRatios: ["16:9"], resolutions: ["720p", "1080p"], durations: [8] },
-  { id: "veo-3.0-fast-generate-001", name: "Veo 3 Fast", aspectRatios: ["16:9"], resolutions: ["720p", "1080p"], durations: [8] },
-  { id: "veo-3.1-generate-preview", name: "Veo 3.1", aspectRatios: ["16:9", "9:16"], resolutions: ["720p", "1080p"], durations: [4, 6, 8] },
-  { id: "veo-3.1-fast-generate-preview", name: "Veo 3.1 Fast", aspectRatios: ["16:9", "9:16"], resolutions: ["720p", "1080p"], durations: [4, 6, 8] },
-  { id: "veo-3.1-lite-generate-preview", name: "Veo 3.1 Lite", aspectRatios: ["16:9", "9:16"], resolutions: ["720p", "1080p"], durations: [4, 6, 8] }
+  { id: "gemini-omni-1.1-flash", name: "Gemini Omni Flash", aspectRatios: VIDEO_RATIOS, resolutions: VIDEO_RESOLUTIONS }
 ];
-var videoAspectRatiosForModel = (model) => VIDEO_MODELS.find((m2) => m2.id === model)?.aspectRatios ?? ["16:9", "9:16"];
-var videoResolutionsForModel = (model) => VIDEO_MODELS.find((m2) => m2.id === model)?.resolutions ?? VIDEO_RESOLUTIONS;
-var videoDurationsForModel = (model) => VIDEO_MODELS.find((m2) => m2.id === model)?.durations ?? VIDEO_DURATIONS;
-var generateVideo = async (input) => {
-  const ai = new GoogleGenAI({ apiKey: input.apiKey });
-  const config = { aspectRatio: input.aspectRatio, numberOfVideos: 1 };
-  if (input.resolution !== void 0)
-    config.resolution = input.resolution;
-  if (input.durationSeconds !== void 0)
-    config.durationSeconds = input.durationSeconds;
-  if (input.negativePrompt !== void 0)
-    config.negativePrompt = input.negativePrompt;
-  const params = { model: input.model, prompt: input.prompt, config };
+var isOmniModel = (model) => model.startsWith("gemini-omni");
+var videoModelInfo = (model) => VIDEO_MODELS.find((m2) => m2.id === model) ?? (isOmniModel(model) ? VIDEO_MODELS.find((m2) => isOmniModel(m2.id)) : void 0);
+var videoAspectRatiosForModel = (model) => videoModelInfo(model)?.aspectRatios ?? VIDEO_RATIOS;
+var videoResolutionsForModel = (model) => videoModelInfo(model)?.resolutions ?? VIDEO_RESOLUTIONS;
+var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var timeoutMessage = (detail) => `Video generation timed out after ${VIDEO_TIMEOUT_MS / 1e3}s` + (detail !== void 0 ? ` (${detail})` : "");
+var readJson = async (res, what) => {
+  try {
+    return await res.json();
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError"))
+      throw error;
+    throw new Error(`${what}: invalid API response`, { cause: error });
+  }
+};
+var ensureOk = async (res, what) => {
+  if (res.ok)
+    return;
+  const raw = await res.text();
+  let message = `HTTP ${res.status}`;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.error?.message === "string")
+      message = parsed.error.message;
+  } catch {
+  }
+  throw new Error(`${what}: ${message}`);
+};
+var fetchApi = async (url, init, apiKey) => {
+  let target = url;
+  for (let hop = 0; ; hop++) {
+    const headers = new Headers(init.headers);
+    if (target.origin === API_ORIGIN)
+      headers.set("x-goog-api-key", apiKey);
+    const res = await fetch(target, { ...init, headers, redirect: "manual" });
+    const location = res.headers.get("location");
+    if (init.method !== void 0 && init.method !== "GET" || res.status < 300 || res.status >= 400 || location === null)
+      return res;
+    await res.body?.cancel();
+    if (hop >= MAX_REDIRECTS)
+      throw new Error("Video generation failed: too many redirects");
+    target = new URL(location, target);
+    if (target.protocol !== "https:")
+      throw new Error("Video generation failed: redirect to a non-HTTPS URL");
+  }
+};
+var runOmniVideo = async (input, deadline) => {
+  const headers = { "Content-Type": "application/json" };
+  const remaining = () => AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+  const text = input.negativePrompt !== void 0 && input.negativePrompt !== "" ? `${input.prompt}
+
+Do not include: ${input.negativePrompt}` : input.prompt;
+  const parts = [];
   if (input.inputImage !== void 0)
-    params.image = { imageBytes: input.inputImage.data, mimeType: input.inputImage.mimeType };
-  let operation = await ai.models.generateVideos(params);
-  const deadline = Date.now() + VIDEO_TIMEOUT_MS;
-  while (operation.done !== true) {
-    if (Date.now() >= deadline)
-      throw new Error(`Video generation timed out after ${VIDEO_TIMEOUT_MS / 1e3}s (operation ${operation.name ?? "unknown"} still running)`);
-    process.stderr.write("video generation in progress...\n");
-    await new Promise((resolve) => setTimeout(resolve, VIDEO_POLL_MS));
-    operation = await ai.operations.getVideosOperation({ operation });
+    parts.push({ type: "image", data: input.inputImage.data, mime_type: input.inputImage.mimeType });
+  parts.push({ type: "text", text });
+  const responseFormat = {
+    type: "video",
+    aspect_ratio: input.aspectRatio,
+    delivery: "uri"
+  };
+  if (input.resolution !== void 0)
+    responseFormat["resolution"] = input.resolution;
+  const res = await fetchApi(new URL(INTERACTIONS_URL), {
+    method: "POST",
+    headers,
+    signal: remaining(),
+    body: JSON.stringify({ model: input.model, input: parts, response_format: responseFormat })
+  }, input.apiKey);
+  await ensureOk(res, "Video generation failed");
+  const body = await readJson(res, "Video generation failed");
+  const video = body.steps?.filter((step) => step.type === "model_output").flatMap((step) => step.content ?? []).find((part2) => part2.type === "video");
+  if (video?.uri === void 0)
+    throw new Error("No video returned by API");
+  let uri;
+  try {
+    uri = new URL(video.uri);
+  } catch {
+    throw new Error("Video generation failed: invalid file URI");
   }
-  if (operation.error !== void 0) {
-    const message = typeof operation.error["message"] === "string" ? operation.error["message"] : JSON.stringify(operation.error);
-    throw new Error(`Video generation failed: ${message}`);
+  if (uri.origin !== API_ORIGIN)
+    throw new Error(`Refusing to send the API key to unexpected host "${uri.hostname}"`);
+  if (uri.username !== "" || uri.password !== "")
+    throw new Error("Video generation failed: unexpected file URI");
+  if (!uri.pathname.endsWith(DOWNLOAD_SUFFIX))
+    throw new Error("Video generation failed: unexpected file URI");
+  const fileUrl = new URL(uri.href);
+  fileUrl.pathname = uri.pathname.slice(0, -DOWNLOAD_SUFFIX.length);
+  fileUrl.search = "";
+  for (; ; ) {
+    const poll = await fetchApi(fileUrl, { headers, signal: remaining() }, input.apiKey);
+    await ensureOk(poll, "Video generation failed");
+    const file = await readJson(poll, "Video generation failed");
+    if (file.state === "ACTIVE")
+      break;
+    if (file.state === "FAILED")
+      throw new Error("Video generation failed: file processing failed");
+    const left = deadline - Date.now();
+    if (left <= 0)
+      throw new Error(timeoutMessage(`file ${fileUrl.href} not ACTIVE`));
+    process.stderr.write(PROGRESS_NOTE);
+    await sleep2(Math.min(VIDEO_POLL_MS, left));
   }
-  const video = operation.response?.generatedVideos?.[0]?.video;
-  if (video === void 0) {
-    const reasons = operation.response?.raiMediaFilteredReasons?.filter(Boolean).join("; ") ?? "";
-    throw new Error(reasons !== "" ? `No video returned (${reasons})` : "No video returned by API");
+  const download = await fetchApi(uri, { headers, signal: remaining() }, input.apiKey);
+  await ensureOk(download, "Video download failed");
+  if (download.body === null)
+    throw new Error("Video download failed: empty body");
+  const part = `${input.outputPath}.${randomBytes(4).toString("hex")}.part`;
+  try {
+    await pipeline2(Readable2.fromWeb(download.body), createWriteStream2(part, { flags: "wx" }));
+    renameSync(part, input.outputPath);
+  } catch (error) {
+    rmSync(part, { force: true });
+    throw error;
   }
-  if (video.videoBytes !== void 0 && video.videoBytes !== "")
-    writeFileSync2(input.outputPath, Buffer.from(video.videoBytes, "base64"));
-  else
-    await ai.files.download({ file: video, downloadPath: input.outputPath });
   return { file: input.outputPath, aspectRatio: input.aspectRatio, model: input.model };
+};
+var generateVideo = async (input) => {
+  const deadline = Date.now() + VIDEO_TIMEOUT_MS;
+  try {
+    return await runOmniVideo(input, deadline);
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError" && Date.now() >= deadline))
+      throw new Error(timeoutMessage(), { cause: error });
+    throw error;
+  }
 };
 
 // src/infra/imagefile.ts
-import { readFileSync as readFileSync2 } from "node:fs";
+import { readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
 var MAX_INPUT_IMAGES = 14;
+var MAX_VIDEO_INPUT_IMAGES = 1;
 var MAX_INPUT_BYTES = 7 * 1024 * 1024;
+var MAX_INLINE_REQUEST_BYTES = 2e7;
+var RIFF_TAG = "RIFF";
+var WEBP_TAG = "WEBP";
 var SIGNATURES = [
-  { mime: "image/png", test: (b) => b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) },
-  { mime: "image/jpeg", test: (b) => b.subarray(0, 2).equals(Buffer.from([255, 216])) },
-  { mime: "image/webp", test: (b) => b.subarray(0, 4).toString("ascii") === "RIFF" && b.subarray(8, 12).toString("ascii") === "WEBP" }
+  { mime: "image/png", test: isPng },
+  { mime: "image/jpeg", test: isJpeg },
+  { mime: "image/webp", test: (b) => b.subarray(0, 4).toString("ascii") === RIFF_TAG && b.subarray(8, 12).toString("ascii") === WEBP_TAG }
 ];
 var readInputImage = (path2) => {
-  const bytes = readFileSync2(path2);
+  let stat3;
+  try {
+    stat3 = statSync2(path2);
+  } catch (err) {
+    throw new Error(`cannot read input image: ${path2}`, { cause: err });
+  }
+  if (!stat3.isFile())
+    throw new Error(`input image is not a regular file: ${path2}`);
+  if (stat3.size > MAX_INPUT_BYTES)
+    throw new Error(`input image too large: ${path2} (${stat3.size} bytes, max ${MAX_INPUT_BYTES})`);
+  let bytes;
+  try {
+    bytes = readFileSync2(path2);
+  } catch (err) {
+    throw new Error(`cannot read input image: ${path2}`, { cause: err });
+  }
   if (bytes.length > MAX_INPUT_BYTES)
     throw new Error(`input image too large: ${path2} (${bytes.length} bytes, max ${MAX_INPUT_BYTES})`);
   const sig = SIGNATURES.find((s2) => s2.test(bytes));
@@ -44924,28 +45070,33 @@ var readInputImage = (path2) => {
 };
 
 // src/cli/main.ts
+var isDirectory = (path2) => {
+  try {
+    return statSync3(path2).isDirectory();
+  } catch {
+    return false;
+  }
+};
 var listModels = () => {
   console.log("Image models (Nano Banana tiers):");
   for (const m2 of MODELS) {
     const flag = m2.id === DEFAULT_MODEL ? "  (default)" : "";
-    const ratios = aspectRatiosForModel(m2.id);
     console.log("");
     console.log(`${m2.id}  (${m2.name})${flag}`);
     console.log(`  resolutions: ${m2.imageSizes.join(", ")}`);
-    console.log(`  ratios (${ratios.length}): ${ratios.join(", ")}`);
+    console.log(`  ratios (${m2.aspectRatios.length}): ${m2.aspectRatios.join(", ")}`);
   }
   console.log("");
-  console.log("Video models (Veo tiers, use with --video):");
+  console.log("Video models (Omni tiers, use with --video):");
   for (const m2 of VIDEO_MODELS) {
     const flag = m2.id === DEFAULT_VIDEO_MODEL ? "  (default)" : "";
     console.log("");
     console.log(`${m2.id}  (${m2.name})${flag}`);
     console.log(`  resolutions: ${m2.resolutions.join(", ")}`);
     console.log(`  ratios (${m2.aspectRatios.length}): ${m2.aspectRatios.join(", ")}`);
-    console.log(`  durations (s): ${m2.durations.join(", ")}`);
   }
 };
-var HELP = `nano-banana ${VERSION} -- image/video generation via Google Nano Banana + Veo (Gemini)
+var HELP = `nano-banana ${VERSION} -- image/video generation via Google Nano Banana + Omni (Gemini)
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
@@ -44955,66 +45106,62 @@ Usage:
 
 Options:
   --prompt <text>         generation prompt (English recommended)         [required]
-  --output <path>         output path: PNG (image) or MP4 (--video)       [required]
+  --output <path>         output path: PNG (image) or MP4 (--video) [required];
+                          the parent directory must exist (not a directory)
   --input <path>          reference image; repeatable (1-${MAX_INPUT_IMAGES}) for image-to-image,
-                          exactly 1 for image-to-video (--video)
-  --aspect-ratio <r>      image: 10 standard ratios; gemini-3.1-flash-image adds 4
-                          ultra-wide/tall. video: 16:9; Veo 3.1 adds 9:16
-                          (see --list-models)   (default 16:9)
+                          exactly 1 for image-to-video (--video); at most 7 MiB per
+                          image and 20 MB (decimal) in total with the prompt
+  --aspect-ratio <r>      model-dependent, see --list-models (default 16:9)
   --image-size <s>        image output resolution; model-dependent (see --list-models)
-                          (default: the model's own default, ~1K)
-  --video                 generate a video (MP4) via Veo instead of an image
-  --resolution <r>        video resolution: 720p or 1080p (--video only)
-                          (default: the model's own default, 720p)
-  --duration <s>          video clip duration in seconds; model-dependent (--video
-                          only; Veo 3.0: 8; Veo 3.1: 4/6/8) (default: model's own)
-  --negative-prompt <t>   what the video must NOT contain (--video only)
+                          (default: the model's own default)
+  --video                 generate a video (MP4) via Omni instead of an image
+  --resolution <r>        video resolution; model-dependent (see --list-models)
+                          (--video only; default: the model's own default)
+  --negative-prompt <t>   what the video must NOT contain (--video only; Omni: appended
+                          to the prompt as natural language)
   --model <id>            Gemini model id (default: image ${DEFAULT_MODEL},
                           video ${DEFAULT_VIDEO_MODEL})
   --key-file <path>       read API key from a file (override; default: environment)
-  --list-models           list models with supported ratios/resolution and exit
+  --list-models           list models with ratios and resolutions, then exit
   --version               print version and exit
   --help                  print this help and exit
 
 API key:
   Read from GEMINI_API_KEY or GOOGLE_API_KEY. Never stored in the project.
+  The key must be visible ASCII (no whitespace or line breaks inside).
   --key-file overrides with a file outside the repo (CI secrets).
 
-Image models (see --list-models):
-  gemini-2.5-flash-image   Nano Banana 1     10 ratios   1K
-  gemini-3-pro-image       Nano Banana Pro   10 ratios   1K/2K/4K        (default)
-  gemini-3.1-flash-image   Nano Banana 2     14 ratios   512/1K/2K/4K
-  Standard ratios (10): 1:1, 4:5, 5:4, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9
-  Nano Banana 2 adds (4): 1:4, 4:1, 1:8, 8:1   (ultra-wide / ultra-tall)
-
-Video models (see --list-models):
-  veo-3.0-generate-001          Veo 3         16:9        720p/1080p   8s   (default)
-  veo-3.0-fast-generate-001     Veo 3 Fast    16:9        720p/1080p   8s
-  veo-3.1-generate-preview      Veo 3.1       16:9/9:16   720p/1080p   4/6/8s
-  veo-3.1-fast-generate-preview Veo 3.1 Fast  16:9/9:16   720p/1080p   4/6/8s
-  veo-3.1-lite-generate-preview Veo 3.1 Lite  16:9/9:16   720p/1080p   4/6/8s
-  All Veo 3 tiers generate native audio. Generation takes 1-6 minutes.
+Models:
+  Run --list-models for each model's ratios and resolutions. All video tiers
+  generate native audio; generation takes 1-6 minutes and gives up after 10
+  minutes. The clip length is not controllable.
 
 Corporate proxy (Zscaler) TLS:
   Trusted automatically from the OS store; override with NODE_EXTRA_CA_CERTS or
   NODE_OPTIONS=--use-system-ca if the Zscaler root is elsewhere.
 
 Output (exactly one JSON envelope on stdout; notes go to stderr):
-  ok:    {"status":"ok","file":"...","aspect_ratio":"...","model":"..."}
+  ok:    {"status":"ok","file":"...","aspect_ratio":"...","model":"...",
+          optional: "image_size", "resolution"}
   error: {"status":"error","message":"..."}
 
 Exit codes:
   0  success
-  2  usage error (missing or invalid arguments)
+  2  usage error (missing or invalid arguments or credentials)
   1  runtime error (API, network, or no image/video returned)`;
-var resolveAspectRatio = (values, model, allowed) => {
-  const explicit = values["aspect-ratio"] ?? "16:9";
-  if (!isAspectRatio(explicit) || !allowed.includes(explicit))
-    return fail(`--aspect-ratio "${explicit}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
-  return explicit;
+var resolveChoice = (flag, raw, model, allowed) => {
+  const hit = allowed.find((v) => String(v) === raw);
+  if (hit === void 0)
+    return fail(`${flag} "${raw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
+  return hit;
 };
 var main = async () => {
-  const values = parseCli(process.argv.slice(2));
+  let values;
+  try {
+    values = parseCli(process.argv.slice(2));
+  } catch (err) {
+    return fail(errorMessage(err), 2);
+  }
   if (values["help"] === true) {
     console.log(HELP);
     return;
@@ -45031,102 +45178,86 @@ var main = async () => {
   const output = values["output"];
   if (prompt === void 0 || output === void 0)
     return fail("--prompt and --output are required (unless --list-models)", 2);
+  if (prompt.trim() === "")
+    return fail("--prompt must not be empty", 2);
+  if (output === "")
+    return fail("--output must not be empty", 2);
+  if (output.endsWith("/") || output.endsWith(sep) || isDirectory(output))
+    return fail(`output path is a directory: ${output}`, 2);
+  if (!isDirectory(dirname(output)))
+    return fail(`output directory does not exist: ${dirname(output)}`, 2);
   const video = values["video"] === true;
   const model = values["model"] ?? (video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL);
   if (!video) {
-    for (const flag of ["resolution", "duration", "negative-prompt"])
+    for (const flag of ["resolution", "negative-prompt"])
       if (values[flag] !== void 0)
         return fail(`--${flag} requires --video`, 2);
   } else if (values["image-size"] !== void 0)
     return fail("--image-size is an image option; use --resolution with --video", 2);
-  const aspectRatio = resolveAspectRatio(
-    values,
+  if (video && imageModelInfo(model) !== void 0)
+    return fail(`--model "${model}" is an image model; it cannot be used with --video`, 2);
+  if (!video && videoModelInfo(model) !== void 0)
+    return fail(`--model "${model}" is a video model; add --video to use it`, 2);
+  const aspectRatio = resolveChoice(
+    "--aspect-ratio",
+    values["aspect-ratio"] ?? "16:9",
     model,
     video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model)
   );
-  let imageSize;
   const sizeRaw = values["image-size"];
-  if (sizeRaw !== void 0) {
-    const allowed = imageSizesForModel(model);
-    if (!isImageSize(sizeRaw) || !allowed.includes(sizeRaw))
-      return fail(`--image-size "${sizeRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
-    imageSize = sizeRaw;
-  }
-  let resolution;
   const resolutionRaw = values["resolution"];
-  if (resolutionRaw !== void 0) {
-    const allowed = videoResolutionsForModel(model);
-    if (!isVideoResolution(resolutionRaw) || !allowed.includes(resolutionRaw))
-      return fail(`--resolution "${resolutionRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
-    resolution = resolutionRaw;
-  }
-  let duration;
-  const durationRaw = values["duration"];
-  if (durationRaw !== void 0) {
-    const allowed = videoDurationsForModel(model);
-    const seconds = Number(durationRaw);
-    if (!Number.isInteger(seconds) || !isVideoDuration(seconds) || !allowed.includes(seconds))
-      return fail(`--duration "${durationRaw}" not supported by ${model} (allowed: ${allowed.join(", ")})`, 2);
-    duration = seconds;
-  }
+  const imageSize = sizeRaw !== void 0 ? resolveChoice("--image-size", sizeRaw, model, imageSizesForModel(model)) : void 0;
+  const resolution = resolutionRaw !== void 0 ? resolveChoice("--resolution", resolutionRaw, model, videoResolutionsForModel(model)) : void 0;
   let inputImages;
   const inputPaths = values["input"];
-  if (inputPaths !== void 0 && inputPaths.length > 0) {
-    const maxInputs = video ? 1 : MAX_INPUT_IMAGES;
+  if (inputPaths !== void 0) {
+    const maxInputs = video ? MAX_VIDEO_INPUT_IMAGES : MAX_INPUT_IMAGES;
     if (inputPaths.length > maxInputs)
       return fail(`too many --input images: ${inputPaths.length} (max ${maxInputs}${video ? " with --video" : ""})`, 2);
     try {
       inputImages = inputPaths.map(readInputImage);
     } catch (err) {
-      return fail(err instanceof Error ? err.message : String(err), 2);
+      return fail(errorMessage(err), 2);
     }
+    const inlineBytes = inputImages.reduce((sum, image) => sum + image.data.length, 0) + Buffer.byteLength(prompt);
+    if (inlineBytes > MAX_INLINE_REQUEST_BYTES)
+      return fail(`inline input too large: ${(inlineBytes / 1e6).toFixed(1)} MB exceeds the 20 MB request limit (use fewer or smaller images)`, 2);
   }
-  const apiKey = resolveApiKey(values["key-file"]);
+  let apiKey;
+  try {
+    apiKey = resolveApiKey(values["key-file"]);
+  } catch (err) {
+    return fail(errorMessage(err), 2);
+  }
   trustSystemCAs();
+  let result;
+  const extra = {};
   if (video) {
-    const input2 = { apiKey, prompt, outputPath: output, model, aspectRatio };
+    const input = { apiKey, prompt, outputPath: output, model, aspectRatio };
     if (resolution !== void 0)
-      input2.resolution = resolution;
-    if (duration !== void 0)
-      input2.durationSeconds = duration;
-    if (values["negative-prompt"] !== void 0)
-      input2.negativePrompt = values["negative-prompt"];
+      input.resolution = resolution;
+    if (values["negative-prompt"] !== void 0 && values["negative-prompt"] !== "")
+      input.negativePrompt = values["negative-prompt"];
     const firstImage = inputImages?.[0];
     if (firstImage !== void 0)
-      input2.inputImage = firstImage;
-    const result2 = await generateVideo(input2);
-    const envelope2 = {
-      status: "ok",
-      file: result2.file,
-      aspect_ratio: result2.aspectRatio,
-      model: result2.model
-    };
+      input.inputImage = firstImage;
+    result = await generateVideo(input);
     if (resolution !== void 0)
-      envelope2.resolution = resolution;
-    if (duration !== void 0)
-      envelope2.duration_seconds = duration;
-    emitOk(envelope2);
-    return;
+      extra.resolution = resolution;
+  } else {
+    const input = { apiKey, prompt, outputPath: output, model, aspectRatio };
+    if (imageSize !== void 0)
+      input.imageSize = imageSize;
+    if (inputImages !== void 0)
+      input.inputImages = inputImages;
+    result = await generateImage(input);
+    if (imageSize !== void 0)
+      extra.image_size = imageSize;
   }
-  const input = { apiKey, prompt, outputPath: output, model, aspectRatio };
-  if (imageSize !== void 0)
-    input.imageSize = imageSize;
-  if (inputImages !== void 0)
-    input.inputImages = inputImages;
-  const result = await generateImage(input);
-  const envelope = {
-    status: "ok",
-    file: result.file,
-    aspect_ratio: result.aspectRatio,
-    model: result.model
-  };
-  if (imageSize !== void 0)
-    envelope.image_size = imageSize;
-  emitOk(envelope);
+  emitOk({ status: "ok", file: result.file, aspect_ratio: result.aspectRatio, model: result.model, ...extra });
 };
 main().catch((err) => {
-  const message = err instanceof Error ? err.message : String(err);
-  fail(message);
+  fail(errorMessage(err));
 });
 /*! Bundled license information:
 
