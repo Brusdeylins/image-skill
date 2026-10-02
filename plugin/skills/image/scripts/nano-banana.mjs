@@ -26755,7 +26755,7 @@ var fail = (message, code = 1) => {
 var errorMessage = (err) => err instanceof Error ? err.message : String(err);
 
 // src/infra/version.ts
-var VERSION = true ? "0.11.1" : "0.0.0-dev";
+var VERSION = true ? "0.11.2" : "0.0.0-dev";
 var PACKAGE = true ? "@brusdeylins/nano-banana" : "@brusdeylins/nano-banana";
 
 // src/core/generate.ts

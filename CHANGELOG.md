@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.2
+
+- `SKILL.md`: removed the pointer to a README section ("Setting the variable")
+  that is not part of the installed plugin; the key-setting commands are
+  listed right above it. Reported by @Milofax in #1.
+
 ## 0.11.1
 
 - Dependencies updated; `npm audit` now reports 0 vulnerabilities (before: 7,

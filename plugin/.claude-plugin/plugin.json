@@ -1,6 +1,6 @@
 {
   "name": "image",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "description": "Image/video-generation skill: text-to-image, image-to-image and text/image-to-video via Google Nano Banana (Gemini Image API), Gemini Omni (Gemini video), with model-aware aspect ratios and resolutions, driven by the bundled nano-banana CLI",
   "author": {
     "name": "Matthias Brusdeylins",

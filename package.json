@@ -1,6 +1,6 @@
 {
   "name": "@brusdeylins/nano-banana",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "description": "Deterministic image/video-generation CLI for LLM agents: Google Nano Banana (Gemini Image API), Gemini Omni (Gemini video) -- text-to-image, image-to-image and text/image-to-video, model-aware aspect ratios and resolutions",
   "keywords": [
     "gemini",
