@@ -70,8 +70,6 @@ set the variable for their shell and stop:
 - **Windows (cmd):** `set GEMINI_API_KEY=AIza...` (session) or
   `setx GEMINI_API_KEY "AIza..."` (persistent)
 
-The README's "Setting the variable" section lists these in full.
-
 ## Corporate Proxy (Zscaler) TLS
 
 The generator calls the Gemini API over HTTPS. Behind a corporate Zscaler
