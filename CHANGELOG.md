@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.11.1
+
+- Dependencies updated; `npm audit` now reports 0 vulnerabilities (before: 7,
+  among them `protobufjs`, `postcss`, `nanoid`, `brace-expansion`, `fast-uri`
+  and `vitest`'s `@vitest/mocker`). None of the vulnerable packages is part of
+  the shipped bundle.
+- `@google/genai` 1.52 -> 2.26 (major). The image call (`generateContent` with
+  `responseModalities`, `imageConfig`, `abortSignal`, inline reference
+  images) is unchanged; verified live for text-to-image and image-to-image.
+  The bundle grows from 1.71 to 1.94 MB.
+- `vitest` 4 -> 5 (major). Running the tests now needs Node 22.12, 24 or 26;
+  the CLI itself still runs on Node >= 20.
+- In-range updates: `eslint`, `typescript-eslint`, `esbuild`, `@types/node`,
+  `eslint-plugin-tsdoc`.
+- `typescript` stays on 6.0.x: no `typescript-eslint` release accepts
+  TypeScript 7 yet (peer range `<6.1.0`).
+- `package-lock.json` now carries the real package version.
+
 ## 0.11.0
 
 - Image models verified against the current Gemini API docs: new

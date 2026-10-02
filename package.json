@@ -1,6 +1,6 @@
 {
   "name": "@brusdeylins/nano-banana",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Deterministic image/video-generation CLI for LLM agents: Google Nano Banana (Gemini Image API), Gemini Omni (Gemini video) -- text-to-image, image-to-image and text/image-to-video, model-aware aspect ratios and resolutions",
   "keywords": [
     "gemini",
@@ -47,7 +47,7 @@
     "prepublishOnly": "npm run lint && npm run test && npm run build"
   },
   "dependencies": {
-    "@google/genai": "^1.30.0",
+    "@google/genai": "^2.26.0",
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0"
   },
@@ -60,6 +60,6 @@
     "eslint-plugin-tsdoc": "^0.5.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
-    "vitest": "^4.1.9"
+    "vitest": "^5.0.3"
   }
 }
