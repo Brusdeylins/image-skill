@@ -19,6 +19,8 @@ export interface OkEnvelope {
     aspect_ratio: string
     /**  the model used  */
     model: string
+    /**  the API provider used  */
+    provider?: string
     /**  the requested output resolution; echoed only when passed explicitly  */
     image_size?: string
     /**  the requested video resolution; echoed only when passed explicitly  */

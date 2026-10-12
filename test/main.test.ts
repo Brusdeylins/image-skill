@@ -15,7 +15,8 @@ import { pngBytes, useTmpDirs } from "./helpers.js"
 /**  the generation calls, replaced by mocks  */
 const core = vi.hoisted(() => ({
     generateImage: vi.fn(),
-    generateVideo: vi.fn()
+    generateVideo: vi.fn(),
+    generateAtlasImage: vi.fn()
 }))
 
 /**  the OS trust store is never touched by the tests  */
@@ -30,6 +31,10 @@ vi.mock("../src/infra/imagefile.js", async (importOriginal) => {
 })
 vi.mock("../src/infra/tls.js", () => ({ trustSystemCAs: tlsMock.trustSystemCAs }))
 vi.mock("../src/core/generate.js", () => ({ generateImage: core.generateImage }))
+vi.mock("../src/core/atlas.js", async (importOriginal) => ({
+    ...await importOriginal<typeof import("../src/core/atlas.js")>(),
+    generateAtlasImage: core.generateAtlasImage
+}))
 vi.mock("../src/core/video.js", async (importOriginal) => ({
     ...await importOriginal<typeof import("../src/core/video.js")>(),
     generateVideo: core.generateVideo
@@ -62,6 +67,7 @@ describe("main", () => {
         vi.resetModules()
         core.generateImage.mockReset()
         core.generateVideo.mockReset()
+        core.generateAtlasImage.mockReset()
         tlsMock.trustSystemCAs.mockReset()
         imageFile.stub = undefined
         vi.stubEnv("GEMINI_API_KEY", "k-test")
@@ -82,7 +88,7 @@ describe("main", () => {
     it("emits the image envelope with image_size and passes the resolved inputs", async () => {
         core.generateImage.mockResolvedValue({ file: "o.png", aspectRatio: "4:3", model: "gemini-3-pro-image" })
         const env = await run("--prompt", "a cat", "--output", "o.png", "--aspect-ratio", "4:3", "--image-size", "2K")
-        expect(env).toEqual({ status: "ok", file: "o.png", aspect_ratio: "4:3", model: "gemini-3-pro-image", image_size: "2K" })
+        expect(env).toEqual({ status: "ok", file: "o.png", aspect_ratio: "4:3", model: "gemini-3-pro-image", provider: "gemini", image_size: "2K" })
         expect(core.generateImage).toHaveBeenCalledWith({
             apiKey: "k-test", prompt: "a cat", outputPath: "o.png", model: "gemini-3-pro-image", aspectRatio: "4:3", imageSize: "2K"
         })
@@ -90,10 +96,19 @@ describe("main", () => {
         expect(tlsMock.trustSystemCAs).toHaveBeenCalledTimes(1)
     })
 
+    it("routes --provider atlas to the Atlas generator with the Atlas key and edit model", async () => {
+        vi.stubEnv("ATLASCLOUD_API_KEY", "atlas-test")
+        core.generateAtlasImage.mockResolvedValue({ file: "o.png", aspectRatio: "16:9", model: "google/nano-banana-2-lite/edit-developer" })
+        const env = await run("--provider", "atlas", "--prompt", "a cat", "--output", "o.png", "--input", pngFile("in.png"))
+        expect(env).toEqual({ status: "ok", file: "o.png", aspect_ratio: "16:9", model: "google/nano-banana-2-lite/edit-developer", provider: "atlas" })
+        expect(core.generateAtlasImage.mock.lastCall?.[0]).toMatchObject({ apiKey: "atlas-test", model: "google/nano-banana-2-lite/edit-developer" })
+        expect(core.generateImage).not.toHaveBeenCalled()
+    })
+
     it("omits image_size from the envelope and the input when not requested", async () => {
         core.generateImage.mockResolvedValue({ file: "o.png", aspectRatio: "16:9", model: "gemini-3-pro-image" })
         const env = await run("--prompt", "a cat", "--output", "o.png")
-        expect(env).toEqual({ status: "ok", file: "o.png", aspect_ratio: "16:9", model: "gemini-3-pro-image" })
+        expect(env).toEqual({ status: "ok", file: "o.png", aspect_ratio: "16:9", model: "gemini-3-pro-image", provider: "gemini" })
         expect(core.generateImage.mock.lastCall?.[0]).not.toHaveProperty("imageSize")
         expect(core.generateImage.mock.lastCall?.[0]).not.toHaveProperty("inputImages")
     })
@@ -102,7 +117,7 @@ describe("main", () => {
         core.generateVideo.mockResolvedValue({ file: "o.mp4", aspectRatio: "9:16", model: "gemini-omni-1.1-flash" })
         const env = await run("--video", "--prompt", "a cat", "--output", "o.mp4", "--aspect-ratio", "9:16",
             "--resolution", "1080p", "--negative-prompt", "blur")
-        expect(env).toEqual({ status: "ok", file: "o.mp4", aspect_ratio: "9:16", model: "gemini-omni-1.1-flash", resolution: "1080p" })
+        expect(env).toEqual({ status: "ok", file: "o.mp4", aspect_ratio: "9:16", model: "gemini-omni-1.1-flash", provider: "gemini", resolution: "1080p" })
         expect(core.generateVideo).toHaveBeenCalledWith({
             apiKey: "k-test", prompt: "a cat", outputPath: "o.mp4", model: "gemini-omni-1.1-flash", aspectRatio: "9:16",
             resolution: "1080p", negativePrompt: "blur"
@@ -137,7 +152,7 @@ describe("main", () => {
     it("defaults to Omni in video mode and emits no optional fields", async () => {
         core.generateVideo.mockResolvedValue({ file: "o.mp4", aspectRatio: "16:9", model: "gemini-omni-1.1-flash" })
         const env = await run("--video", "--prompt", "a cat", "--output", "o.mp4")
-        expect(env).toEqual({ status: "ok", file: "o.mp4", aspect_ratio: "16:9", model: "gemini-omni-1.1-flash" })
+        expect(env).toEqual({ status: "ok", file: "o.mp4", aspect_ratio: "16:9", model: "gemini-omni-1.1-flash", provider: "gemini" })
         expect(core.generateVideo).toHaveBeenCalledWith({
             apiKey: "k-test", prompt: "a cat", outputPath: "o.mp4", model: "gemini-omni-1.1-flash", aspectRatio: "16:9"
         })

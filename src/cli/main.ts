@@ -13,7 +13,7 @@
 import { statSync } from "node:fs"
 import { dirname, sep } from "node:path"
 import { parseCli, type CliValues } from "../infra/args.js"
-import { resolveApiKey } from "../infra/apikey.js"
+import { resolveApiKey, type ApiProvider } from "../infra/apikey.js"
 import { trustSystemCAs } from "../infra/tls.js"
 import { emitOk, fail, errorMessage, type OkEnvelope } from "../infra/envelope.js"
 import { VERSION, PACKAGE } from "../infra/version.js"
@@ -27,6 +27,7 @@ import {
     type VideoGenerateInput
 } from "../core/video.js"
 import { readInputImage, MAX_INPUT_IMAGES, MAX_VIDEO_INPUT_IMAGES, MAX_INLINE_REQUEST_BYTES } from "../infra/imagefile.js"
+import { ATLAS_EDIT_MODEL, ATLAS_IMAGE_SIZES, ATLAS_TEXT_MODEL, atlasModelFor, generateAtlasImage } from "../core/atlas.js"
 import type { InputImage, GenerateResult } from "../core/types.js"
 
 /**  whether the path exists and is a directory  */
@@ -58,18 +59,26 @@ const listModels = (): void => {
         console.log(`  resolutions: ${m.resolutions.join(", ")}`)
         console.log(`  ratios (${m.aspectRatios.length}): ${m.aspectRatios.join(", ")}`)
     }
+    console.log("")
+    console.log("Atlas Cloud image models (use --provider atlas):")
+    console.log(`  ${ATLAS_TEXT_MODEL}  (text-to-image, default without --input)`)
+    console.log(`  ${ATLAS_EDIT_MODEL}  (image editing, default with --input)`)
+    console.log("  resolutions: 1K")
+    console.log("  ratios (14): all standard and ultra-wide/tall image ratios")
 }
 
 /**  the help text  */
-const HELP = `nano-banana ${VERSION} -- image/video generation via Google Nano Banana + Omni (Gemini)
+const HELP = `nano-banana ${VERSION} -- image generation via Gemini or Atlas Cloud; video via Gemini Omni
 
 Usage:
   nano-banana --prompt "..." --output image.png [--aspect-ratio 16:9]
+  nano-banana --provider atlas --prompt "..." --output image.png
   nano-banana --prompt "edit: ..." --input ref.png --output out.png
   nano-banana --video --prompt "..." --output clip.mp4 [--resolution 1080p]
   nano-banana --list-models
 
 Options:
+  --provider <id>         image API provider: gemini or atlas         (default gemini)
   --prompt <text>         generation prompt (English recommended)         [required]
   --output <path>         output path: PNG (image) or MP4 (--video) [required];
                           the parent directory must exist (not a directory)
@@ -84,15 +93,17 @@ Options:
                           (--video only; default: the model's own default)
   --negative-prompt <t>   what the video must NOT contain (--video only; Omni: appended
                           to the prompt as natural language)
-  --model <id>            Gemini model id (default: image ${DEFAULT_MODEL},
-                          video ${DEFAULT_VIDEO_MODEL})
+  --model <id>            provider model id (default: Gemini image ${DEFAULT_MODEL},
+                          video ${DEFAULT_VIDEO_MODEL}; Atlas: by mode, see --list-models)
   --key-file <path>       read API key from a file (override; default: environment)
   --list-models           list models with ratios and resolutions, then exit
   --version               print version and exit
   --help                  print this help and exit
 
 API key:
-  Read from GEMINI_API_KEY or GOOGLE_API_KEY. Never stored in the project.
+  Gemini: GEMINI_API_KEY or GOOGLE_API_KEY.
+  Atlas Cloud: ATLASCLOUD_API_KEY or ATLAS_CLOUD_API_KEY.
+  Never stored in the project.
   The key must be visible ASCII (no whitespace or line breaks inside).
   --key-file overrides with a file outside the repo (CI secrets).
 
@@ -107,7 +118,7 @@ Corporate proxy (Zscaler) TLS:
 
 Output (exactly one JSON envelope on stdout; notes go to stderr):
   ok:    {"status":"ok","file":"...","aspect_ratio":"...","model":"...",
-          optional: "image_size", "resolution"}
+          "provider":"...", optional: "image_size", "resolution"}
   error: {"status":"error","message":"..."}
 
 Exit codes:
@@ -170,8 +181,21 @@ const main = async (): Promise<void> => {
     if (!isDirectory(dirname(output)))
         return fail(`output directory does not exist: ${dirname(output)}`, 2)
 
+    const providerRaw = values["provider"] ?? "gemini"
+    if (providerRaw !== "gemini" && providerRaw !== "atlas")
+        return fail(`unknown --provider "${providerRaw}" (allowed: gemini, atlas)`, 2)
+    const provider: ApiProvider = providerRaw
+
     const video = values["video"] === true
-    const model = values["model"] ?? (video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL)
+    if (video && provider === "atlas")
+        return fail("--provider atlas currently supports images only; omit --provider for Omni video", 2)
+
+    const hasInputImages = (values["input"]?.length ?? 0) > 0
+    const model = values["model"] ?? (provider === "atlas"
+        ? atlasModelFor(hasInputImages)
+        : (video ? DEFAULT_VIDEO_MODEL : DEFAULT_MODEL))
+    if (provider === "atlas" && model !== atlasModelFor(hasInputImages))
+        return fail(`--model "${model}" does not match Atlas ${hasInputImages ? "edit" : "text-to-image"} mode`, 2)
 
     /*  the video-only options are usage errors in image mode, and vice versa  */
     if (!video) {
@@ -185,15 +209,16 @@ const main = async (): Promise<void> => {
     /*  an image model id in video mode (or vice versa) is a usage error  */
     if (video && imageModelInfo(model) !== undefined)
         return fail(`--model "${model}" is an image model; it cannot be used with --video`, 2)
-    if (!video && videoModelInfo(model) !== undefined)
+    if (provider === "gemini" && !video && videoModelInfo(model) !== undefined)
         return fail(`--model "${model}" is a video model; add --video to use it`, 2)
 
     const aspectRatio = resolveChoice("--aspect-ratio", values["aspect-ratio"] ?? "16:9", model,
-        video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model))
+        provider === "atlas" ? aspectRatiosForModel("gemini-3.1-flash-image")
+            : (video ? videoAspectRatiosForModel(model) : aspectRatiosForModel(model)))
 
     const sizeRaw       = values["image-size"]
     const resolutionRaw = values["resolution"]
-    const imageSize     = sizeRaw       !== undefined ? resolveChoice("--image-size", sizeRaw, model, imageSizesForModel(model)) : undefined
+    const imageSize     = sizeRaw       !== undefined ? resolveChoice("--image-size", sizeRaw, model, provider === "atlas" ? ATLAS_IMAGE_SIZES : imageSizesForModel(model)) : undefined
     const resolution    = resolutionRaw !== undefined ? resolveChoice("--resolution", resolutionRaw, model, videoResolutionsForModel(model)) : undefined
 
     let inputImages: InputImage[] | undefined
@@ -217,7 +242,7 @@ const main = async (): Promise<void> => {
 
     let apiKey: string
     try {
-        apiKey = resolveApiKey(values["key-file"])
+        apiKey = resolveApiKey(values["key-file"], provider)
     }
     catch (err) {
         return fail(errorMessage(err), 2)
@@ -249,11 +274,11 @@ const main = async (): Promise<void> => {
         if (inputImages !== undefined)
             input.inputImages = inputImages
 
-        result = await generateImage(input)
+        result = provider === "atlas" ? await generateAtlasImage(input) : await generateImage(input)
         if (imageSize !== undefined)
             extra.image_size = imageSize
     }
-    emitOk({ status: "ok", file: result.file, aspect_ratio: result.aspectRatio, model: result.model, ...extra })
+    emitOk({ status: "ok", file: result.file, aspect_ratio: result.aspectRatio, model: result.model, provider, ...extra })
 }
 
 main().catch((err: unknown) => {

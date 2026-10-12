@@ -13,6 +13,8 @@ import { parseArgs as nodeParseArgs } from "node:util"
 
 /**  the option declarations: one source for parsing and for the values type  */
 const OPTIONS = {
+    /**  image API provider (gemini or atlas)  */
+    "provider":        { type: "string" },
     /**  generation prompt  */
     "prompt":          { type: "string" },
     /**  PNG or MP4 output path  */
@@ -29,7 +31,7 @@ const OPTIONS = {
     "resolution":      { type: "string" },
     /**  what the video must NOT contain  */
     "negative-prompt": { type: "string" },
-    /**  Gemini model id  */
+    /**  provider model id  */
     "model":           { type: "string" },
     /**  path to an API key file (override)  */
     "key-file":        { type: "string" },

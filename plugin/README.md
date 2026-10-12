@@ -1,7 +1,8 @@
 # image -- Claude Code plugin
 
 Professional image and video generation for Claude Code, built on the bundled
-[nano-banana](../README.md) CLI, **Google Nano Banana** (Gemini Image API) and
+[nano-banana](../README.md) CLI. Images use **Google Nano Banana** through
+Gemini by default, with Atlas Cloud as an optional provider; video uses
 **Gemini Omni** (Gemini video). The plugin ships **one skill**:
 
 - **`image`** -- crafts a prompt and generates a PNG image or an MP4 clip.
@@ -20,8 +21,9 @@ Professional image and video generation for Claude Code, built on the bundled
 ## Requirements
 
 - **Node >= 20**.
-- **API key** in the environment: `GEMINI_API_KEY` or `GOOGLE_API_KEY`. Never
-  stored in the project. It must be visible ASCII (no whitespace or line
+- **API key** in the environment: `GEMINI_API_KEY` / `GOOGLE_API_KEY` for
+  Gemini, or `ATLASCLOUD_API_KEY` / `ATLAS_CLOUD_API_KEY` for Atlas Cloud.
+  Never stored in the project. It must be visible ASCII (no whitespace or line
   break); otherwise the run exits 2.
 
 ## Corporate proxy (Zscaler)

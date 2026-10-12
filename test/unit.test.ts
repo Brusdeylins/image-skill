@@ -16,7 +16,8 @@ import tls from "node:tls"
 import { join } from "node:path"
 import { PNG } from "pngjs"
 import { parseCli } from "../src/infra/args.js"
-import { resolveApiKey, KEY_ENV_VARS } from "../src/infra/apikey.js"
+import { resolveApiKey, ATLAS_KEY_ENV_VARS, KEY_ENV_VARS } from "../src/infra/apikey.js"
+import { ATLAS_EDIT_MODEL, ATLAS_TEXT_MODEL, atlasModelFor } from "../src/core/atlas.js"
 import { MODELS, DEFAULT_MODEL, aspectRatiosForModel, imageSizesForModel, imageModelInfo } from "../src/core/models.js"
 import {
     VIDEO_MODELS, DEFAULT_VIDEO_MODEL, isOmniModel, videoModelInfo,
@@ -43,6 +44,11 @@ describe("parseCli", () => {
         expect(values["prompt"]).toBe("a cat")
         expect(values["output"]).toBe("c.png")
         expect(values["list-models"]).toBe(true)
+    })
+
+    it("parses an Atlas provider selection", () => {
+        const values = parseCli(["--provider", "atlas", "--prompt", "a cat", "--output", "c.png"])
+        expect(values["provider"]).toBe("atlas")
     })
 
     it("keeps a `--`-prefixed value via the `=` form ", () => {
@@ -434,9 +440,17 @@ describe("resolveApiKey", () => {
         expect(resolveApiKey()).toBe("google-key")
     })
 
+    it("reads the Atlas Cloud key only for the Atlas provider", () => {
+        clearEnv()
+        vi.stubEnv(ATLAS_KEY_ENV_VARS[0], "  atlas-key  ")
+        expect(resolveApiKey(undefined, "atlas")).toBe("atlas-key")
+        expect(() => resolveApiKey()).toThrow(/No API key found for Gemini/)
+    })
+
     it("throws an actionable error when no key is present", () => {
         clearEnv()
         expect(() => resolveApiKey()).toThrow(/No API key found/)
+        expect(() => resolveApiKey(undefined, "atlas")).toThrow(/No API key found for Atlas Cloud/)
     })
 
     it("throws when every variable is whitespace-only", () => {
@@ -543,5 +557,12 @@ describe("trustSystemCAs", () => {
         Reflect.deleteProperty(live, missing)
         expect(() => trustSystemCAs()).not.toThrow()
         expect(mocks[other]).not.toHaveBeenCalled()
+    })
+})
+
+describe("Atlas Cloud models", () => {
+    it("selects text or edit model from the presence of input images", () => {
+        expect(atlasModelFor(false)).toBe(ATLAS_TEXT_MODEL)
+        expect(atlasModelFor(true)).toBe(ATLAS_EDIT_MODEL)
     })
 })

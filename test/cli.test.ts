@@ -45,7 +45,7 @@ const videoArgs = (...extra: string[]): string[] =>
 
 /*  run the built bundle with no API key in the environment; a null status maps to -1  */
 const runCli = (args: readonly string[]): { out: string, code: number } => {
-    const env = { ...process.env, GEMINI_API_KEY: "", GOOGLE_API_KEY: "" }
+    const env = { ...process.env, GEMINI_API_KEY: "", GOOGLE_API_KEY: "", ATLASCLOUD_API_KEY: "", ATLAS_CLOUD_API_KEY: "" }
     try {
         return { out: execFileSync(process.execPath, [CLI_BUNDLE, ...args], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] }), code: 0 }
     }
@@ -145,6 +145,22 @@ describe("cli usage errors (exit code 2)", () => {
     it("rejects more than one --input image in video mode", () => {
         expectUsageError(videoArgs("--input", "/nonexistent-dir/nb-ref.png", "--input", "/nonexistent-dir/nb-ref.png"),
             "too many --input images: 2 (max 1 with --video)")
+    })
+
+    it("rejects an unknown --provider", () => {
+        expectUsageError(imageArgs("--provider", "nope"), "unknown --provider \"nope\"")
+    })
+
+    it("rejects Atlas Cloud for video mode", () => {
+        expectUsageError(videoArgs("--provider", "atlas"), "supports images only")
+    })
+
+    it("rejects a non-1K image size for the Atlas Cloud lite model", () => {
+        expectUsageError(imageArgs("--provider", "atlas", "--image-size", "2K"), "not supported by google/nano-banana-2-lite")
+    })
+
+    it("rejects a --model that does not match the Atlas mode", () => {
+        expectUsageError(imageArgs("--provider", "atlas", "--model", "gemini-3-pro-image"), "does not match Atlas text-to-image mode")
     })
 
     it("rejects --video with an image model id", () => {
