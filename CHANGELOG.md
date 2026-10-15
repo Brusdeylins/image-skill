@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add optional `--provider atlas` image generation and editing with live model
+  selection, media upload for local references, a single generation POST, and
+  bounded prediction polling. Gemini remains the default and video continues
+  to use Omni through Gemini.
+- Add provider-aware API key discovery (`ATLASCLOUD_API_KEY` /
+  `ATLAS_CLOUD_API_KEY`) and include the selected provider in successful JSON
+  envelopes.
+
 ## 0.11.2
 
 - `SKILL.md`: removed the pointer to a README section ("Setting the variable")

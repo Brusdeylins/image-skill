@@ -1,8 +1,9 @@
 ---
 name: image
 description: >
-  Generate professional images using Google Nano Banana (Gemini Image API)
-  and videos using Gemini Omni (Gemini video). Trigger this skill
+  Generate professional images using Google Nano Banana through Gemini or the
+  optional Atlas Cloud provider, and videos using Gemini Omni (Gemini video).
+  Trigger this skill
   when the user wants to generate, create, or produce images, photos,
   illustrations, visuals, videos, clips, or animations, or when another skill
   needs an image or video for a given aspect ratio.
@@ -19,6 +20,8 @@ and in cinematic video generation.
 ## Capabilities
 
 - **Text-to-image**: generate an image from a prompt (`--prompt` + `--output`).
+- **Provider choice**: Gemini is the default; `--provider atlas` uses Atlas
+  Cloud for text-to-image or image editing (images only).
 - **Image-to-image / editing**: pass one or more reference images with `--input`
   (repeatable, 1-14) to edit, restyle, or compose. The model keeps subjects
   consistent across edits. Examples: recolor/retouch, background replacement,
@@ -56,7 +59,9 @@ Every run prints one JSON envelope on stdout.
 ## API Key (environment only)
 
 The API key is **never stored in this project**. It is read from the
-environment at call time, from `GEMINI_API_KEY` (or `GOOGLE_API_KEY`).
+environment at call time: Gemini reads `GEMINI_API_KEY` (or
+`GOOGLE_API_KEY`); Atlas Cloud reads `ATLASCLOUD_API_KEY` (or
+`ATLAS_CLOUD_API_KEY`).
 `--key-file <path>` exists only as an override for a secret mounted OUTSIDE the
 project tree (CI). The key must be visible ASCII; stray whitespace or a line
 break is a usage error (exit 2) that never echoes the value.
@@ -96,6 +101,10 @@ not in the user's OS trust store; tell the user to import it there (or set
 # Basic image generation
 node <skill-dir/>/scripts/nano-banana.mjs \
   --prompt "..." --output image.png
+
+# Optional Atlas Cloud image provider
+node <skill-dir/>/scripts/nano-banana.mjs \
+  --provider atlas --prompt "..." --output image.png
 
 # With explicit aspect ratio
 node <skill-dir/>/scripts/nano-banana.mjs \
@@ -141,6 +150,7 @@ node <skill-dir/>/scripts/nano-banana.mjs --list-models
 
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `--provider` | no | gemini | Image API provider: `gemini` or `atlas` (images only) |
 | `--prompt` | yes | -- | Generation/edit prompt (English recommended); an empty or whitespace-only prompt is a usage error (exit 2) |
 | `--output` | yes | -- | Output file path: PNG (image) or MP4 (`--video`); its parent directory must exist; an empty value or a directory is a usage error (exit 2) |
 | `--input` | no | -- | Reference image; **repeatable** (1-14) for image-to-image, exactly **1** for image-to-video (PNG/JPEG/WEBP, <=7 MiB each, <=20 MB (decimal) in total with the prompt; exit 2 above) |
@@ -149,7 +159,7 @@ node <skill-dir/>/scripts/nano-banana.mjs --list-models
 | `--video` | -- | -- | Generate an MP4 video via Omni instead of a PNG image |
 | `--resolution` | no | model default | Video resolution (`360p`/`720p`/`1080p`/`4k`), **model-dependent**; `--video` only |
 | `--negative-prompt` | no | -- | What the video must NOT contain; `--video` only |
-| `--model` | no | gemini-3-pro-image / gemini-omni-1.1-flash | Gemini model ID (see Models) |
+| `--model` | no | gemini-3-pro-image / gemini-omni-1.1-flash; Atlas: by mode | Provider model ID (see Models) |
 | `--key-file` | no | environment | Path to API key file (override; default reads env) |
 | `--list-models` | -- | -- | List models with their aspect ratios and resolutions, and exit |
 
@@ -180,6 +190,11 @@ gets the full ratio and size sets and the API decides.
 |----------------|------|---------------|-------------|----------|
 | `gemini-omni-1.1-flash` (default) | Gemini Omni Flash | `16:9`, `9:16` | `360p`, `720p`, `1080p`, `4k` | not controllable |
 
+With `--provider atlas`, text-to-image uses
+`google/nano-banana-2-lite/text-to-image-developer`; providing `--input`
+selects `google/nano-banana-2-lite/edit-developer`. Both support the 14 image
+ratios at `1K`. Atlas Cloud does not support `--video` in this CLI.
+
 Omni generates native audio and runs through the Interactions API (always URI
 delivery, file polled until ACTIVE, streamed download). The clip length cannot
 be controlled (there is no option); the CLI sends no duration and appends
@@ -196,7 +211,7 @@ usage error (exit 2). Without them the model uses its own default. Run
 ### Output and exit codes
 
 Every run prints exactly one JSON envelope on stdout (notes go to stderr):
-`{"status":"ok","file":...,"aspect_ratio":...,"model":...}` or
+`{"status":"ok","file":...,"aspect_ratio":...,"model":...,"provider":...}` or
 `{"status":"error","message":...}`. Exit codes: `0` ok, `2` usage error
 (missing/invalid args), `1` runtime error (API/network/no image or video).
 
